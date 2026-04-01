@@ -1,4 +1,7 @@
 import json
+import os
+import uuid
+import httpx
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
@@ -150,7 +153,21 @@ async def generate_image(req: ImageGenRequest):
         return JSONResponse({"error": "未配置 DASHSCOPE_API_KEY 环境变量"}, status_code=500)
     try:
         urls = qwen_client.generate_image(req.prompt, req.n)
-        return {"images": urls}
+        # 下载图片到本地保存，避免临时URL过期
+        gen_dir = os.path.join("static", "generated")
+        os.makedirs(gen_dir, exist_ok=True)
+        local_urls = []
+        with httpx.Client(timeout=60.0) as client:
+            for url in urls:
+                ext = ".png"
+                filename = f"{uuid.uuid4().hex[:12]}{ext}"
+                filepath = os.path.join(gen_dir, filename)
+                resp = client.get(url)
+                resp.raise_for_status()
+                with open(filepath, "wb") as f:
+                    f.write(resp.content)
+                local_urls.append(f"/static/generated/{filename}")
+        return {"images": local_urls}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 

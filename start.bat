@@ -52,8 +52,11 @@ if "!DASHSCOPE_API_KEY!"=="" (
 
 echo.
 echo [启动] 服务地址: http://localhost:8080
-echo [提示] 按 Ctrl+C 停止服务
+echo [提示] 关闭此窗口即可停止服务
 echo.
+
+REM 延迟2秒后自动打开浏览器
+start "" cmd /c "timeout /t 2 /nobreak >nul & start http://localhost:8080"
 
 python main.py
 pause

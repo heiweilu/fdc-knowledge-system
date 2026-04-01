@@ -69,7 +69,7 @@ tailwind.config = {
       <i class="fa-solid fa-bolt text-brand-500"></i>
       柔直仿真知识系统
     </h1>
-    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">MMC两端柔直系统仿真辅助</p>
+    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">MMC两端柔直系统仿真辅助 · <span id="sidebarAssistantName" class="cursor-pointer hover:text-brand-500" onclick="editAssistantName()" title="点击修改助理名称">小助理</span></p>
   </div>
 
   <!-- 快捷指令 -->
@@ -83,6 +83,12 @@ tailwind.config = {
       <button onclick="quickCmd('故障排查')" class="text-xs px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 hover:border-brand-500 hover:text-brand-600 transition flex items-center gap-1"><i class="fa-solid fa-wrench"></i>故障排查</button>
       <button onclick="quickCmd('控制策略')" class="text-xs px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 hover:border-brand-500 hover:text-brand-600 transition flex items-center gap-1"><i class="fa-solid fa-gears"></i>控制策略</button>
     </div>
+  </div>
+
+  <!-- 对话列表 -->
+  <div class="p-3 border-b border-slate-200 dark:border-slate-700">
+    <p class="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wider">历史对话</p>
+    <div id="convList" class="space-y-0.5 max-h-32 overflow-y-auto scrollbar-thin"></div>
   </div>
 
   <!-- 知识库目录 -->
@@ -110,7 +116,7 @@ tailwind.config = {
 
   <!-- 底部工具栏 -->
   <div class="p-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
-    <button onclick="clearChat()" class="text-xs text-slate-500 hover:text-red-500 transition" title="清空对话"><i class="fa-solid fa-trash-can"></i> 清空</button>
+    <button onclick="clearChat()" class="text-xs text-brand-500 hover:text-brand-600 transition" title="新建对话"><i class="fa-solid fa-plus"></i> 新对话</button>
     <div class="flex items-center gap-3">
       <button onclick="showGuide()" class="text-slate-500 hover:text-brand-500 transition" title="使用说明"><i class="fa-solid fa-circle-question"></i></button>
       <span id="statusDot" class="w-2 h-2 rounded-full bg-gray-400"></span>
@@ -343,16 +349,19 @@ tailwind.config = {
 
 <script>
 // ─── State ───
-let chatHistory = JSON.parse(localStorage.getItem('fdcChat') || '[]');
+let chatHistory = JSON.parse(localStorage.getItem(`fdcChat_${localStorage.getItem('fdcCurrentConv') || ''}`) || '[]');
 let pendingImage = null; // {base64, name}
 let isStreaming = false;
 let enableSearch = false;
+let currentConvId = localStorage.getItem('fdcCurrentConv') || generateConvId();
+let convList = JSON.parse(localStorage.getItem('fdcConvList') || '[]');
 let totalTokens = parseInt(localStorage.getItem('fdcTotalTokens') || '0');
 let totalInputTokens = parseInt(localStorage.getItem('fdcInputTokens') || '0');
 let totalOutputTokens = parseInt(localStorage.getItem('fdcOutputTokens') || '0');
 let totalCost = parseFloat(localStorage.getItem('fdcCost') || '0');
 let totalBudget = parseFloat(localStorage.getItem('fdcBudget') || '13.52');
 let imageGenCount = parseInt(localStorage.getItem('fdcImageGenCount') || '0');
+let assistantName = localStorage.getItem('fdcAssistantName') || '小助理';
 // 模型计费 (元/百万tokens)
 const PRICING = { input: 0.2, output: 2.0, imageGen: 0.2 };
 const API = '';
@@ -367,6 +376,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupPaste();
   setupDragDrop();
   initBudget();
+  renderConvList();
 });
 
 async function checkStatus() {
@@ -509,8 +519,8 @@ async function sendMessage() {
       }, aiMsgEl);
       clearImage();
     } else {
-      // Send last 20 messages for context
-      const msgs = chatHistory.slice(-20);
+      // 智能上下文管理：按token估算截断
+      const msgs = buildContextMessages(chatHistory, 8000);
       fullText = await streamRequest('/api/chat', {messages: msgs, enable_search: enableSearch}, aiMsgEl);
     }
     chatHistory.push({role: 'assistant', content: fullText});
@@ -589,7 +599,7 @@ function appendMessage(role, text, imageBase64, streaming) {
   if(role === 'ai') {
     const icon = document.createElement('div');
     icon.className = 'flex items-center gap-2 mb-2';
-    icon.innerHTML = '<span class="w-6 h-6 rounded-full bg-gradient-to-br from-brand-500 to-blue-600 flex items-center justify-center"><i class="fa-solid fa-bolt text-white text-xs"></i></span><span class="text-xs font-medium text-slate-500 dark:text-slate-400">顾丫的小助理</span>';
+    icon.innerHTML = `<span class="w-6 h-6 rounded-full bg-gradient-to-br from-brand-500 to-blue-600 flex items-center justify-center"><i class="fa-solid fa-bolt text-white text-xs"></i></span><span class="text-xs font-medium text-slate-500 dark:text-slate-400 cursor-pointer hover:text-brand-500" onclick="editAssistantName()" title="点击修改名称">${assistantName}</span>`;
     const container = document.createElement('div');
     container.appendChild(icon);
     container.appendChild(bubble);
@@ -599,6 +609,13 @@ function appendMessage(role, text, imageBase64, streaming) {
   }
 
   area.appendChild(wrap);
+  // 性能优化：限制DOM中最大消息数
+  const MAX_DOM_MESSAGES = 50;
+  const msgs = area.querySelectorAll(':scope > div.max-w-3xl');
+  if(msgs.length > MAX_DOM_MESSAGES) {
+    const excess = msgs.length - MAX_DOM_MESSAGES;
+    for(let i = 0; i < excess; i++) msgs[i].remove();
+  }
   area.scrollTop = area.scrollHeight;
   return contentDiv;
 }
@@ -659,7 +676,19 @@ function renderMd(text) {
 }
 
 function saveChat() {
-  localStorage.setItem('fdcChat', JSON.stringify(chatHistory.slice(-100)));
+  localStorage.setItem(`fdcChat_${currentConvId}`, JSON.stringify(chatHistory.slice(-100)));
+  // 更新对话列表
+  const existing = convList.find(c => c.id === currentConvId);
+  const title = chatHistory.length > 0 ? chatHistory[0].content.slice(0, 30) : '新对话';
+  if(existing) {
+    existing.title = title;
+    existing.time = Date.now();
+  } else {
+    convList.push({id: currentConvId, title, time: Date.now()});
+  }
+  localStorage.setItem('fdcConvList', JSON.stringify(convList));
+  localStorage.setItem('fdcCurrentConv', currentConvId);
+  renderConvList();
 }
 
 function restoreChat() {
@@ -668,21 +697,135 @@ function restoreChat() {
   const welcome = area.querySelector('.text-center.py-8');
   if(welcome) welcome.remove();
   chatHistory.forEach(m => {
-    appendMessage(m.role === 'assistant' ? 'ai' : 'user', m.content);
+    if(m.role === 'assistant' && m.images && m.images.length) {
+      // 恢复图像生成消息
+      const el = appendMessage('ai', '');
+      let html = `<p class="mb-2 font-medium text-purple-600 dark:text-purple-400"><i class="fa-solid fa-palette mr-1"></i> AI 生成参考图</p>`;
+      m.images.forEach((url, i) => {
+        html += `<img src="${url}" class="max-w-full rounded-xl border border-slate-200 dark:border-slate-700 mb-2 cursor-pointer" onclick="window.open(this.src)" title="点击查看原图" alt="AI生成图像 ${i+1}">`;
+      });
+      el.innerHTML = html;
+    } else {
+      appendMessage(m.role === 'assistant' ? 'ai' : 'user', m.content);
+    }
   });
 }
 
 function clearChat() {
-  if(!confirm('确认清空所有对话记录？')) return;
+  // 新建对话
+  currentConvId = generateConvId();
   chatHistory = [];
-  localStorage.removeItem('fdcChat');
+  localStorage.setItem('fdcCurrentConv', currentConvId);
   const area = document.getElementById('chatArea');
   area.innerHTML = '';
-  location.reload();
+  showWelcome();
+  renderConvList();
+}
+
+function generateConvId() {
+  return 'conv_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+
+function switchConv(id) {
+  if(id === currentConvId) return;
+  currentConvId = id;
+  chatHistory = JSON.parse(localStorage.getItem(`fdcChat_${id}`) || '[]');
+  localStorage.setItem('fdcCurrentConv', id);
+  const area = document.getElementById('chatArea');
+  area.innerHTML = '';
+  if(chatHistory.length) {
+    restoreChat();
+  } else {
+    showWelcome();
+  }
+  renderConvList();
+}
+
+function deleteConv(id, e) {
+  e.stopPropagation();
+  if(!confirm('确认删除此对话？')) return;
+  localStorage.removeItem(`fdcChat_${id}`);
+  convList = convList.filter(c => c.id !== id);
+  localStorage.setItem('fdcConvList', JSON.stringify(convList));
+  if(id === currentConvId) {
+    clearChat();
+  } else {
+    renderConvList();
+  }
+}
+
+function renderConvList() {
+  const el = document.getElementById('convList');
+  if(!el) return;
+  const sorted = [...convList].sort((a,b) => b.time - a.time);
+  el.innerHTML = sorted.map(c => `
+    <button class="nav-item w-full text-left px-3 py-2 rounded-lg text-xs flex items-center gap-2 transition group ${c.id === currentConvId ? 'bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400' : ''}"
+      onclick="switchConv('${c.id}')">
+      <i class="fa-solid fa-message text-slate-400 w-4 shrink-0"></i>
+      <span class="truncate flex-1">${c.title || '新对话'}</span>
+      <span class="text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 shrink-0" onclick="deleteConv('${c.id}', event)" title="删除"><i class="fa-solid fa-xmark text-[10px]"></i></span>
+    </button>
+  `).join('');
+}
+
+function showWelcome() {
+  const area = document.getElementById('chatArea');
+  area.innerHTML = `
+    <div class="max-w-3xl mx-auto text-center py-8 fade-in">
+      <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-brand-500 to-blue-600 flex items-center justify-center">
+        <i class="fa-solid fa-bolt text-white text-2xl"></i>
+      </div>
+      <h2 class="text-xl font-bold mb-2">柔直仿真 AI 辅助知识系统</h2>
+      <p class="text-slate-500 dark:text-slate-400 text-sm mb-6">基于 MMC 两端柔直系统仿真模型，提供智能问答、截图分析、参数推荐等功能</p>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3 max-w-2xl mx-auto text-left">
+        <div class="p-3 rounded-xl border border-slate-200 dark:border-slate-700">
+          <i class="fa-solid fa-message text-brand-500 mb-2"></i>
+          <p class="text-xs font-medium">智能问答</p>
+          <p class="text-xs text-slate-500 dark:text-slate-400">询问 MMC 原理、控制策略、仿真操作等</p>
+        </div>
+        <div class="p-3 rounded-xl border border-slate-200 dark:border-slate-700">
+          <i class="fa-solid fa-image text-brand-500 mb-2"></i>
+          <p class="text-xs font-medium">截图分析</p>
+          <p class="text-xs text-slate-500 dark:text-slate-400">上传 Simulink 截图，AI 解读模型与波形</p>
+        </div>
+        <div class="p-3 rounded-xl border border-slate-200 dark:border-slate-700">
+          <i class="fa-solid fa-calculator text-brand-500 mb-2"></i>
+          <p class="text-xs font-medium">参数推荐</p>
+          <p class="text-xs text-slate-500 dark:text-slate-400">根据电压等级和容量推荐 MMC 参数</p>
+        </div>
+      </div>
+    </div>`;
 }
 
 function updateSendBtn() {
   document.getElementById('sendBtn').disabled = isStreaming;
+}
+
+// ─── Context Management ───
+function estimateTokens(text) {
+  if(!text) return 0;
+  // 中文字符约1.5 tokens/字, 英文约0.25 tokens/字母 ≈ 1.3/词
+  let cn = 0, en = 0;
+  for(const ch of text) {
+    if(/[\u4e00-\u9fff]/.test(ch)) cn++;
+    else en++;
+  }
+  return Math.ceil(cn * 1.5 + en * 0.3);
+}
+
+function buildContextMessages(history, maxTokens) {
+  // 从最新消息向前累积，不超过 maxTokens
+  const result = [];
+  let used = 0;
+  // 过滤掉图像生成占位消息
+  const valid = history.filter(m => !m.images && !m.content.startsWith('[图像生成]') && !m.content.startsWith('[生成图像:'));
+  for(let i = valid.length - 1; i >= 0; i--) {
+    const tk = estimateTokens(valid[i].content);
+    if(used + tk > maxTokens && result.length > 0) break;
+    result.unshift(valid[i]);
+    used += tk;
+  }
+  return result;
 }
 
 // ─── Image handling ───
@@ -836,6 +979,19 @@ function initBudget() {
     document.getElementById('tokenCount').textContent = totalTokens.toLocaleString();
   }
   updateBudgetBar();
+  // 恢复助理名称
+  document.getElementById('sidebarAssistantName').textContent = assistantName;
+}
+
+// ─── Assistant Name ───
+function editAssistantName() {
+  const input = prompt(`修改助理名称（当前: ${assistantName}）：`, assistantName);
+  if(input === null) return;
+  const name = input.trim();
+  if(!name) return;
+  assistantName = name;
+  localStorage.setItem('fdcAssistantName', name);
+  document.getElementById('sidebarAssistantName').textContent = name;
 }
 
 // ─── Image Generation ───
@@ -879,7 +1035,7 @@ async function generateImage() {
     });
     html += `<p class="text-[10px] text-slate-400 mt-1"><i class="fa-solid fa-circle-info mr-1"></i>AI 生成的参考示意图，仅供辅助理解，不代表精确技术图纸 · ¥${PRICING.imageGen}/张</p>`;
     aiMsgEl.innerHTML = html;
-    chatHistory.push({role: 'assistant', content: `[生成图像: ${prompt}]`});
+    chatHistory.push({role: 'assistant', content: `[生成图像: ${prompt}]`, images: data.images});
     saveChat();
   } catch(e) {
     aiMsgEl.innerHTML = `<p class="text-red-500"><i class="fa-solid fa-triangle-exclamation mr-1"></i>图像生成失败: ${e.message}</p>`;
