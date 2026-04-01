@@ -2,6 +2,10 @@
 
 MMC 两端柔性直流输电系统仿真辅助平台，基于 MATLAB/Simulink 模型，提供 AI 智能问答、截图分析、参数推荐、图像生成等功能。
 
+![alt text](image-2.png)
+
+![alt text](image-1.png)
+
 ## 功能特性
 
 - **智能问答** — 基于 Qwen3.5-Flash 大模型，支持柔直仿真相关问答
