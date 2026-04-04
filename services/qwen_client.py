@@ -11,7 +11,7 @@ def _get_client() -> OpenAI:
 
 
 def chat_stream(messages: list[dict], knowledge_context: str = "", enable_search: bool = False) -> AsyncGenerator[str, None]:
-    """纯文本对话，流式返回。"""
+    """纯文本对话，流式返回。支持 qwen3.6-plus 的 thinking 模式。"""
     client = _get_client()
 
     system_msg = SYSTEM_PROMPT
@@ -20,21 +20,26 @@ def chat_stream(messages: list[dict], knowledge_context: str = "", enable_search
 
     full_messages = [{"role": "system", "content": system_msg}] + messages
 
-    extra = {}
+    extra_body = {"enable_thinking": True}
     if enable_search:
-        extra["extra_body"] = {"enable_search": True}
+        extra_body["enable_search"] = True
 
     completion = client.chat.completions.create(
         model=MODEL_TEXT,
         messages=full_messages,
         stream=True,
         stream_options={"include_usage": True},
-        **extra,
+        extra_body=extra_body,
     )
 
     for chunk in completion:
         if chunk.choices:
             delta = chunk.choices[0].delta
+            # 思考内容（reasoning_content）
+            reasoning = getattr(delta, "reasoning_content", None)
+            if reasoning:
+                yield json.dumps({"thinking": reasoning}, ensure_ascii=False)
+                continue
             if delta.content:
                 yield delta.content
         if hasattr(chunk, "usage") and chunk.usage:
@@ -47,7 +52,7 @@ def analyze_image_stream(
     analysis_type: str = "general",
     knowledge_context: str = "",
 ) -> AsyncGenerator[str, None]:
-    """图片分析，流式返回文本（不请求音频输出）。"""
+    """图片分析，流式返回文本，支持 thinking 模式。"""
     client = _get_client()
 
     prompt_template = IMAGE_PROMPTS.get(analysis_type, IMAGE_PROMPTS["general"])
@@ -78,11 +83,16 @@ def analyze_image_stream(
         messages=messages,
         stream=True,
         stream_options={"include_usage": True},
+        extra_body={"enable_thinking": True},
     )
 
     for chunk in completion:
         if chunk.choices:
             delta = chunk.choices[0].delta
+            reasoning = getattr(delta, "reasoning_content", None)
+            if reasoning:
+                yield json.dumps({"thinking": reasoning}, ensure_ascii=False)
+                continue
             if hasattr(delta, "content") and delta.content:
                 yield delta.content
         if hasattr(chunk, "usage") and chunk.usage:
@@ -90,7 +100,7 @@ def analyze_image_stream(
 
 
 def generate_image(prompt: str, n: int = 1) -> list[str]:
-    """使用 qwen-image-2.0 生成图像，返回图片URL列表。"""
+    """使用 wan2.7-image 生成图像，返回图片URL列表。"""
     url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
     headers = {
         "Authorization": f"Bearer {DASHSCOPE_API_KEY}",
@@ -104,9 +114,11 @@ def generate_image(prompt: str, n: int = 1) -> list[str]:
         "parameters": {
             "result_format": "message",
             "n": n,
+            "size": "1024*1024",
+            "watermark": False,
         },
     }
-    with httpx.Client(timeout=120.0) as client:
+    with httpx.Client(timeout=180.0) as client:
         resp = client.post(url, headers=headers, json=body)
         resp.raise_for_status()
         data = resp.json()

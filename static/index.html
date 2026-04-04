@@ -12,136 +12,323 @@
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap');
-  body { font-family: 'Noto Sans SC', sans-serif; }
-  .scrollbar-thin::-webkit-scrollbar { width: 6px; }
-  .scrollbar-thin::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-  .dark .scrollbar-thin::-webkit-scrollbar-thumb { background: #475569; }
-  .msg-user { background: linear-gradient(135deg, #e0f2fe, #bae6fd); }
-  .dark .msg-user { background: linear-gradient(135deg, #1e3a5f, #164e63); }
-  .msg-ai { background: #f8fafc; }
-  .dark .msg-ai { background: #1e293b; }
+
+  /* ─── CSS Variables ─── */
+  :root {
+    --accent: #7c5cfc;
+    --accent-light: #a78bfa;
+    --accent-dark: #5b3fd4;
+    --accent-glow: rgba(124, 92, 252, 0.35);
+    --glass-bg: rgba(255, 255, 255, 0.55);
+    --glass-bg-strong: rgba(255, 255, 255, 0.72);
+    --glass-border: rgba(255, 255, 255, 0.45);
+    --glass-blur: 18px;
+    --glass-shadow: 0 8px 32px rgba(124, 92, 252, 0.08);
+    --neu-bg: #e8eaf0;
+    --neu-shadow-light: #ffffff;
+    --neu-shadow-dark: rgba(166, 171, 189, 0.48);
+    --page-bg: #eef0f5;
+    --text-primary: #2d3250;
+    --text-secondary: #6b7094;
+    --text-muted: #9ca0b8;
+    --sidebar-width: 288px;
+  }
+
+  body {
+    font-family: 'Noto Sans SC', sans-serif;
+    background: var(--page-bg);
+    color: var(--text-primary);
+  }
+
+  /* ─── Background Glow Spots ─── */
+  .bg-glow {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
+  }
+  .bg-glow::before, .bg-glow::after {
+    content: ''; position: absolute; border-radius: 50%; filter: blur(100px); opacity: 0.45;
+  }
+  .bg-glow::before {
+    width: 500px; height: 500px; top: -120px; right: -80px;
+    background: radial-gradient(circle, rgba(124,92,252,0.3), transparent 70%);
+    animation: glowFloat 15s ease-in-out infinite alternate;
+  }
+  .bg-glow::after {
+    width: 400px; height: 400px; bottom: -60px; left: 10%;
+    background: radial-gradient(circle, rgba(96,165,250,0.25), transparent 70%);
+    animation: glowFloat 12s ease-in-out infinite alternate-reverse;
+  }
+  @keyframes glowFloat {
+    0% { transform: translate(0, 0) scale(1); }
+    100% { transform: translate(30px, -40px) scale(1.15); }
+  }
+
+  /* ─── Glass Card ─── */
+  .glass-card {
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+    border-radius: 16px;
+  }
+  .glass-card-strong {
+    background: var(--glass-bg-strong);
+    backdrop-filter: blur(22px);
+    -webkit-backdrop-filter: blur(22px);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+    border-radius: 16px;
+  }
+
+  /* ─── Sidebar Glass ─── */
+  .sidebar-glass {
+    background: var(--glass-bg-strong);
+    backdrop-filter: blur(22px);
+    -webkit-backdrop-filter: blur(22px);
+    border-right: 1px solid var(--glass-border);
+    box-shadow: 4px 0 24px rgba(124, 92, 252, 0.06);
+  }
+
+  /* ─── Neumorphism Buttons ─── */
+  .neu-btn {
+    background: var(--neu-bg);
+    border: none;
+    border-radius: 12px;
+    box-shadow: 4px 4px 8px var(--neu-shadow-dark), -4px -4px 8px var(--neu-shadow-light);
+    transition: all 0.2s ease;
+    color: var(--text-primary);
+  }
+  .neu-btn:hover {
+    box-shadow: 2px 2px 4px var(--neu-shadow-dark), -2px -2px 4px var(--neu-shadow-light);
+    transform: translateY(-1px);
+  }
+  .neu-btn:active {
+    box-shadow: inset 2px 2px 5px var(--neu-shadow-dark), inset -2px -2px 5px var(--neu-shadow-light);
+    transform: translateY(0);
+  }
+
+  /* ─── Glow Button (accent) ─── */
+  .glow-btn {
+    background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px var(--accent-glow);
+    transition: all 0.25s ease;
+  }
+  .glow-btn:hover {
+    box-shadow: 0 6px 25px var(--accent-glow);
+    transform: translateY(-2px);
+  }
+
+  /* ─── Neumorphism Input ─── */
+  .neu-input {
+    background: var(--neu-bg);
+    border: none;
+    border-radius: 12px;
+    box-shadow: inset 3px 3px 6px var(--neu-shadow-dark), inset -3px -3px 6px var(--neu-shadow-light);
+    color: var(--text-primary);
+    transition: box-shadow 0.2s ease;
+  }
+  .neu-input:focus {
+    outline: none;
+    box-shadow: inset 2px 2px 4px var(--neu-shadow-dark), inset -2px -2px 4px var(--neu-shadow-light), 0 0 0 2px var(--accent-light);
+  }
+  .neu-input::placeholder { color: var(--text-muted); }
+
+  /* ─── Scrollbar ─── */
+  .scrollbar-thin::-webkit-scrollbar { width: 5px; }
+  .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(124,92,252,0.2); border-radius: 3px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: rgba(124,92,252,0.35); }
+
+  /* ─── Message Bubbles ─── */
+  .msg-user {
+    background: linear-gradient(135deg, rgba(124,92,252,0.12), rgba(96,165,250,0.1));
+    border: 1px solid rgba(124,92,252,0.15);
+    border-radius: 18px 18px 4px 18px;
+  }
+  .msg-ai {
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    border-radius: 18px 18px 18px 4px;
+  }
+
+  /* ─── Typing Animation ─── */
   .typing-dot { animation: dot-blink 1.4s infinite both; }
   .typing-dot:nth-child(2) { animation-delay: 0.2s; }
   .typing-dot:nth-child(3) { animation-delay: 0.4s; }
   @keyframes dot-blink { 0%,80%,100%{opacity:0} 40%{opacity:1} }
-  .prose pre { background: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; font-size: 0.8125rem; line-height: 1.6; }
-  .prose code { background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-size: 0.8125em; }
-  .dark .prose code { background: #334155; }
-  .prose pre code { background: none; padding: 0; }
+
+  /* ─── Prose Styling ─── */
+  .prose pre { background: #1e1e2e; color: #cdd6f4; padding: 1rem; border-radius: 12px; overflow-x: auto; font-size: 0.8125rem; line-height: 1.6; border: 1px solid rgba(124,92,252,0.15); }
+  .prose code { background: rgba(124,92,252,0.08); color: var(--accent-dark); padding: 2px 6px; border-radius: 6px; font-size: 0.8125em; }
+  .prose pre code { background: none; color: inherit; padding: 0; }
   .prose p { margin-bottom: 0.75em; line-height: 1.75; }
   .prose p:last-child { margin-bottom: 0; }
   .prose ul, .prose ol { margin: 0.5em 0 0.75em 1.25em; }
   .prose li { margin-bottom: 0.35em; line-height: 1.7; }
-  .prose li::marker { color: #3b82f6; }
+  .prose li::marker { color: var(--accent); }
   .prose h1, .prose h2, .prose h3, .prose h4 { margin-top: 1.25em; margin-bottom: 0.5em; font-weight: 600; }
-  .prose h3 { font-size: 1.05em; color: #2563eb; }
-  .dark .prose h3 { color: #60a5fa; }
-  .prose blockquote { border-left: 3px solid #3b82f6; padding: 0.5em 1em; margin: 0.75em 0; background: #f0f9ff; border-radius: 0 0.5rem 0.5rem 0; }
-  .dark .prose blockquote { background: #1e3a5f; }
-  .prose hr { margin: 1em 0; border-color: #e2e8f0; }
-  .dark .prose hr { border-color: #475569; }
-  .prose strong { color: #1e40af; }
-  .dark .prose strong { color: #93c5fd; }
+  .prose h3 { font-size: 1.05em; color: var(--accent); }
+  .prose blockquote { border-left: 3px solid var(--accent); padding: 0.5em 1em; margin: 0.75em 0; background: rgba(124,92,252,0.05); border-radius: 0 12px 12px 0; }
+  .prose hr { margin: 1em 0; border-color: rgba(124,92,252,0.12); }
+  .prose strong { color: var(--accent-dark); }
   .prose table { width: 100%; border-collapse: collapse; margin: 0.75em 0; font-size: 0.875em; }
-  .prose th, .prose td { border: 1px solid #e2e8f0; padding: 8px 12px; text-align: left; }
-  .dark .prose th, .dark .prose td { border-color: #475569; }
-  .prose th { background: #f1f5f9; font-weight: 500; }
-  .dark .prose th { background: #334155; }
-  .fade-in { animation: fadeIn 0.3s ease; }
-  @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
-  .nav-item:hover { background: rgba(59,130,246,0.1); }
-  .dark .nav-item:hover { background: rgba(59,130,246,0.2); }
-  .drop-zone.drag-over { border-color: #3b82f6; background: rgba(59,130,246,0.05); }
+  .prose th, .prose td { border: 1px solid rgba(124,92,252,0.1); padding: 8px 12px; text-align: left; }
+  .prose th { background: rgba(124,92,252,0.06); font-weight: 500; color: var(--accent-dark); }
+
+  /* ─── Animations ─── */
+  .fade-in { animation: cardEnter 0.4s cubic-bezier(0.22, 1, 0.36, 1); }
+  @keyframes cardEnter {
+    from { opacity: 0; transform: translateY(12px) scale(0.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes pulseRing {
+    0% { box-shadow: 0 0 0 0 var(--accent-glow); }
+    70% { box-shadow: 0 0 0 8px transparent; }
+    100% { box-shadow: 0 0 0 0 transparent; }
+  }
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+  .shimmer-loading {
+    background: linear-gradient(90deg, transparent 25%, rgba(124,92,252,0.08) 50%, transparent 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+
+  /* ─── Nav Items ─── */
+  .nav-item { transition: all 0.2s ease; border-radius: 10px; }
+  .nav-item:hover { background: rgba(124,92,252,0.08); color: var(--accent); }
+  .nav-item.active { background: rgba(124,92,252,0.12); color: var(--accent); font-weight: 500; }
+
+  /* ─── Drop Zone ─── */
+  .drop-zone.drag-over { border-color: var(--accent); background: rgba(124,92,252,0.04); }
+
+  /* ─── Divider ─── */
+  .divider-glass {
+    height: 1px;
+    background: linear-gradient(to right, transparent, rgba(124,92,252,0.15), transparent);
+    border: none;
+  }
+
+  /* ─── Status Badge ─── */
+  .status-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 10px; border-radius: 20px; font-size: 11px;
+    background: var(--glass-bg);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--glass-border);
+  }
+
+  /* ─── Accent Gradient Text ─── */
+  .accent-gradient {
+    background: linear-gradient(135deg, var(--accent), #60a5fa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
 </style>
 <script>
 tailwind.config = {
-  darkMode: 'class',
-  theme: { extend: { colors: { brand: { 50:'#eff6ff',100:'#dbeafe',500:'#3b82f6',600:'#2563eb',700:'#1d4ed8' }}}}
+  theme: { extend: { colors: { accent: { 50:'#f3f0ff',100:'#e9e0ff',400:'#a78bfa',500:'#7c5cfc',600:'#5b3fd4',700:'#4c2fb3' }}}}
 }
 </script>
 </head>
-<body class="h-screen flex overflow-hidden bg-white text-slate-800 dark:bg-slate-900 dark:text-slate-100 transition-colors">
+<body class="h-screen flex overflow-hidden transition-colors">
+
+<!-- Background Glow -->
+<div class="bg-glow"></div>
 
 <!-- ─── 左侧导航 ─── -->
-<aside id="sidebar" class="w-72 h-full flex flex-col border-r border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 shrink-0 transition-all">
-  <div class="p-4 border-b border-slate-200 dark:border-slate-700">
+<aside id="sidebar" class="w-72 h-full flex flex-col sidebar-glass shrink-0 transition-all relative z-10">
+  <div class="p-4 border-b divider-glass">
     <h1 class="text-lg font-bold flex items-center gap-2">
-      <i class="fa-solid fa-bolt text-brand-500"></i>
-      柔直仿真知识系统
+      <span class="w-8 h-8 rounded-xl bg-gradient-to-br from-[var(--accent)] to-blue-500 flex items-center justify-center shadow-lg" style="box-shadow: 0 4px 12px var(--accent-glow);">
+        <i class="fa-solid fa-bolt text-white text-sm"></i>
+      </span>
+      <span class="accent-gradient">柔直仿真知识系统</span>
     </h1>
-    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">MMC两端柔直系统仿真辅助 · <span id="sidebarAssistantName" class="cursor-pointer hover:text-brand-500" onclick="editAssistantName()" title="点击修改助理名称">小助理</span></p>
+    <p class="text-xs mt-1" style="color: var(--text-muted);">MMC两端柔直系统仿真辅助 · <span id="sidebarAssistantName" class="cursor-pointer hover:text-[var(--accent)]" onclick="editAssistantName()" title="点击修改助理名称">小助理</span></p>
   </div>
 
   <!-- 快捷指令 -->
   <div class="p-3">
-    <p class="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wider">快捷指令</p>
+    <p class="text-xs font-medium mb-2 uppercase tracking-wider" style="color: var(--text-muted);">快捷指令</p>
     <div class="grid grid-cols-2 gap-2">
-      <button onclick="quickCmd('分析波形')" class="text-xs px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 hover:border-brand-500 hover:text-brand-600 transition flex items-center gap-1"><i class="fa-solid fa-chart-line"></i>分析波形</button>
-      <button onclick="quickCmd('解读模型')" class="text-xs px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 hover:border-brand-500 hover:text-brand-600 transition flex items-center gap-1"><i class="fa-solid fa-diagram-project"></i>解读模型</button>
-      <button onclick="quickCmd('推荐参数')" class="text-xs px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 hover:border-brand-500 hover:text-brand-600 transition flex items-center gap-1"><i class="fa-solid fa-sliders"></i>推荐参数</button>
-      <button onclick="quickCmd('下一步操作')" class="text-xs px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 hover:border-brand-500 hover:text-brand-600 transition flex items-center gap-1"><i class="fa-solid fa-forward-step"></i>下一步</button>
-      <button onclick="quickCmd('故障排查')" class="text-xs px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 hover:border-brand-500 hover:text-brand-600 transition flex items-center gap-1"><i class="fa-solid fa-wrench"></i>故障排查</button>
-      <button onclick="quickCmd('控制策略')" class="text-xs px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 hover:border-brand-500 hover:text-brand-600 transition flex items-center gap-1"><i class="fa-solid fa-gears"></i>控制策略</button>
+      <button onclick="quickCmd('分析波形')" class="neu-btn text-xs px-3 py-2 flex items-center gap-1"><i class="fa-solid fa-chart-line" style="color: var(--accent);"></i>分析波形</button>
+      <button onclick="quickCmd('解读模型')" class="neu-btn text-xs px-3 py-2 flex items-center gap-1"><i class="fa-solid fa-diagram-project" style="color: var(--accent);"></i>解读模型</button>
+      <button onclick="quickCmd('推荐参数')" class="neu-btn text-xs px-3 py-2 flex items-center gap-1"><i class="fa-solid fa-sliders" style="color: var(--accent);"></i>推荐参数</button>
+      <button onclick="quickCmd('下一步操作')" class="neu-btn text-xs px-3 py-2 flex items-center gap-1"><i class="fa-solid fa-forward-step" style="color: var(--accent);"></i>下一步</button>
+      <button onclick="quickCmd('故障排查')" class="neu-btn text-xs px-3 py-2 flex items-center gap-1"><i class="fa-solid fa-wrench" style="color: var(--accent);"></i>故障排查</button>
+      <button onclick="quickCmd('控制策略')" class="neu-btn text-xs px-3 py-2 flex items-center gap-1"><i class="fa-solid fa-gears" style="color: var(--accent);"></i>控制策略</button>
     </div>
   </div>
 
   <!-- 对话列表 -->
-  <div class="p-3 border-b border-slate-200 dark:border-slate-700">
-    <p class="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wider">历史对话</p>
+  <div class="p-3">
+    <div class="divider-glass mb-3"></div>
+    <p class="text-xs font-medium mb-2 uppercase tracking-wider" style="color: var(--text-muted);">历史对话</p>
     <div id="convList" class="space-y-0.5 max-h-32 overflow-y-auto scrollbar-thin"></div>
   </div>
 
   <!-- 知识库目录 -->
   <div class="flex-1 overflow-y-auto scrollbar-thin p-3">
-    <p class="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wider">知识库</p>
+    <div class="divider-glass mb-3"></div>
+    <p class="text-xs font-medium mb-2 uppercase tracking-wider" style="color: var(--text-muted);">知识库</p>
     <div id="knowledgeNav" class="space-y-0.5"></div>
   </div>
 
   <!-- 参数推荐 -->
-  <div class="p-3 border-t border-slate-200 dark:border-slate-700">
-    <p class="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wider">参数推荐</p>
-    <select id="scenarioSelect" class="w-full text-sm px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 dark:bg-slate-700 mb-2" onchange="loadScenario()">
+  <div class="p-3">
+    <div class="divider-glass mb-3"></div>
+    <p class="text-xs font-medium mb-2 uppercase tracking-wider" style="color: var(--text-muted);">参数推荐</p>
+    <select id="scenarioSelect" class="neu-input w-full text-sm px-3 py-2 mb-2" onchange="loadScenario()">
       <option value="">选择预设场景...</option>
     </select>
     <div id="paramResult" class="text-xs space-y-1 hidden"></div>
     <div class="mt-2">
-      <p class="text-xs text-slate-500 dark:text-slate-400 mb-1">自定义参数</p>
+      <p class="text-xs mb-1" style="color: var(--text-muted);">自定义参数</p>
       <div class="flex gap-2">
-        <input id="udcInput" type="number" placeholder="Udc(kV)" class="w-1/2 text-xs px-2 py-1.5 rounded border border-slate-200 dark:border-slate-600 dark:bg-slate-700">
-        <input id="capInput" type="number" placeholder="容量(MW)" class="w-1/2 text-xs px-2 py-1.5 rounded border border-slate-200 dark:border-slate-600 dark:bg-slate-700">
+        <input id="udcInput" type="number" placeholder="Udc(kV)" class="neu-input w-1/2 text-xs px-2 py-1.5">
+        <input id="capInput" type="number" placeholder="容量(MW)" class="neu-input w-1/2 text-xs px-2 py-1.5">
       </div>
-      <button onclick="calcCustom()" class="mt-2 w-full text-xs px-3 py-1.5 bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition">计算</button>
+      <button onclick="calcCustom()" class="glow-btn mt-2 w-full text-xs px-3 py-1.5">计算</button>
     </div>
   </div>
 
   <!-- 底部工具栏 -->
-  <div class="p-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
-    <button onclick="clearChat()" class="text-xs text-brand-500 hover:text-brand-600 transition" title="新建对话"><i class="fa-solid fa-plus"></i> 新对话</button>
+  <div class="p-3 flex items-center justify-between">
+    <div class="divider-glass absolute left-3 right-3" style="top: auto;"></div>
+    <button onclick="clearChat()" class="text-xs transition flex items-center gap-1" style="color: var(--accent);" title="新建对话"><i class="fa-solid fa-plus"></i> 新对话</button>
     <div class="flex items-center gap-3">
-      <button onclick="showGuide()" class="text-slate-500 hover:text-brand-500 transition" title="使用说明"><i class="fa-solid fa-circle-question"></i></button>
-      <span id="statusDot" class="w-2 h-2 rounded-full bg-gray-400"></span>
-      <button onclick="toggleDark()" class="text-slate-500 hover:text-brand-500 transition" title="切换主题"><i class="fa-solid fa-circle-half-stroke"></i></button>
+      <button onclick="showGuide()" class="transition" style="color: var(--text-muted);" title="使用说明"><i class="fa-solid fa-circle-question"></i></button>
+      <span id="statusDot" class="w-2.5 h-2.5 rounded-full bg-gray-400" style="animation: pulseRing 2s infinite;"></span>
     </div>
   </div>
 </aside>
 
 <!-- ─── 主内容区 ─── -->
-<main class="flex-1 flex flex-col min-w-0 overflow-hidden">
+<main class="flex-1 flex flex-col min-w-0 overflow-hidden relative z-10">
   <!-- 顶栏 -->
-  <header class="h-12 px-4 flex items-center justify-between border-b border-slate-200 dark:border-slate-700 shrink-0">
-    <button onclick="toggleSidebar()" class="lg:hidden text-slate-500"><i class="fa-solid fa-bars"></i></button>
-    <span class="text-sm text-slate-500 dark:text-slate-400" id="headerInfo">两端柔性直流输电系统 · MMCSIDUAN0x11.slx</span>
-    <div class="flex items-center gap-2">
+  <header class="h-14 px-5 flex items-center justify-between shrink-0 glass-card-strong" style="border-radius: 0; border-top: none; border-left: none; border-right: none;">
+    <button onclick="toggleSidebar()" class="lg:hidden" style="color: var(--text-muted);"><i class="fa-solid fa-bars"></i></button>
+    <span class="text-sm" style="color: var(--text-secondary);" id="headerInfo">两端柔性直流输电系统 · MMCSIDUAN0x11.slx</span>
+    <div class="flex items-center gap-3">
       <!-- 费用进度条 -->
-      <div id="budgetBar" class="flex items-center gap-1.5 text-xs cursor-pointer" onclick="showBudgetEdit()" title="点击修改总预算">
-        <span class="text-amber-600 dark:text-amber-400">¥<span id="costSpent">0.00</span></span>
-        <div class="w-20 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-          <div id="costProgress" class="h-full bg-gradient-to-r from-green-400 to-amber-400 rounded-full transition-all duration-500" style="width: 0%"></div>
+      <div id="budgetBar" class="flex items-center gap-1.5 text-xs cursor-pointer glass-card px-3 py-1.5" style="border-radius: 20px;" onclick="showBudgetEdit()" title="点击修改总预算">
+        <span style="color: var(--accent);">¥<span id="costSpent">0.00</span></span>
+        <div class="w-20 h-1.5 rounded-full overflow-hidden" style="background: rgba(124,92,252,0.1);">
+          <div id="costProgress" class="h-full rounded-full transition-all duration-500" style="width: 0%; background: linear-gradient(90deg, var(--accent-light), var(--accent));"></div>
         </div>
-        <span class="text-slate-400">/¥<span id="budgetTotal">13.52</span></span>
+        <span style="color: var(--text-muted);">/¥<span id="budgetTotal">13.52</span></span>
       </div>
-      <span id="tokenCounter" class="text-xs px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 hidden"><i class="fa-solid fa-coins mr-1"></i><span id="tokenCount">0</span></span>
-      <span id="apiStatus" class="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500"></span>
+      <span id="tokenCounter" class="status-badge hidden"><i class="fa-solid fa-coins mr-1" style="color: var(--accent);"></i><span id="tokenCount">0</span></span>
+      <span id="apiStatus" class="status-badge"></span>
     </div>
   </header>
 
@@ -149,80 +336,87 @@ tailwind.config = {
   <div id="chatArea" class="flex-1 overflow-y-auto scrollbar-thin p-4 space-y-4">
     <!-- 欢迎消息 -->
     <div class="max-w-3xl mx-auto text-center py-8 fade-in">
-      <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-brand-500 to-blue-600 flex items-center justify-center">
-        <i class="fa-solid fa-bolt text-white text-2xl"></i>
+      <div class="w-20 h-20 mx-auto mb-5 rounded-2xl flex items-center justify-center" style="background: linear-gradient(135deg, var(--accent), #60a5fa); box-shadow: 0 8px 30px var(--accent-glow);">
+        <i class="fa-solid fa-bolt text-white text-3xl"></i>
       </div>
-      <h2 class="text-xl font-bold mb-2">柔直仿真 AI 辅助知识系统</h2>
-      <p class="text-slate-500 dark:text-slate-400 text-sm mb-6">基于 MMC 两端柔直系统仿真模型，提供智能问答、截图分析、参数推荐等功能</p>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-3 max-w-2xl mx-auto text-left">
-        <div class="p-3 rounded-xl border border-slate-200 dark:border-slate-700">
-          <i class="fa-solid fa-message text-brand-500 mb-2"></i>
-          <p class="text-xs font-medium">智能问答</p>
-          <p class="text-xs text-slate-500 dark:text-slate-400">询问 MMC 原理、控制策略、仿真操作等</p>
+      <h2 class="text-2xl font-bold mb-2 accent-gradient">柔直仿真 AI 辅助知识系统</h2>
+      <p class="text-sm mb-8" style="color: var(--text-secondary);">基于 MMC 两端柔直系统仿真模型，提供智能问答、截图分析、参数推荐等功能</p>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-2xl mx-auto text-left">
+        <div class="glass-card p-4 hover:scale-[1.02] transition-transform cursor-default">
+          <div class="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style="background: rgba(124,92,252,0.1);">
+            <i class="fa-solid fa-message" style="color: var(--accent);"></i>
+          </div>
+          <p class="text-sm font-medium mb-1">智能问答</p>
+          <p class="text-xs" style="color: var(--text-muted);">询问 MMC 原理、控制策略、仿真操作等</p>
         </div>
-        <div class="p-3 rounded-xl border border-slate-200 dark:border-slate-700">
-          <i class="fa-solid fa-image text-brand-500 mb-2"></i>
-          <p class="text-xs font-medium">截图分析</p>
-          <p class="text-xs text-slate-500 dark:text-slate-400">上传 Simulink 截图，AI 解读模型与波形</p>
+        <div class="glass-card p-4 hover:scale-[1.02] transition-transform cursor-default">
+          <div class="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style="background: rgba(124,92,252,0.1);">
+            <i class="fa-solid fa-image" style="color: var(--accent);"></i>
+          </div>
+          <p class="text-sm font-medium mb-1">截图分析</p>
+          <p class="text-xs" style="color: var(--text-muted);">上传 Simulink 截图，AI 解读模型与波形</p>
         </div>
-        <div class="p-3 rounded-xl border border-slate-200 dark:border-slate-700">
-          <i class="fa-solid fa-calculator text-brand-500 mb-2"></i>
-          <p class="text-xs font-medium">参数推荐</p>
-          <p class="text-xs text-slate-500 dark:text-slate-400">根据电压等级和容量推荐 MMC 参数</p>
+        <div class="glass-card p-4 hover:scale-[1.02] transition-transform cursor-default">
+          <div class="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style="background: rgba(124,92,252,0.1);">
+            <i class="fa-solid fa-calculator" style="color: var(--accent);"></i>
+          </div>
+          <p class="text-sm font-medium mb-1">参数推荐</p>
+          <p class="text-xs" style="color: var(--text-muted);">根据电压等级和容量推荐 MMC 参数</p>
         </div>
       </div>
     </div>
   </div>
 
   <!-- 图片预览条 -->
-  <div id="imagePreview" class="hidden px-4 py-2 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+  <div id="imagePreview" class="hidden px-4 py-2 glass-card-strong" style="border-radius: 0; border-left: none; border-right: none;">
     <div class="flex items-center gap-2">
-      <img id="previewImg" class="h-16 rounded-lg border border-slate-300 dark:border-slate-600 object-cover">
-      <div class="flex-1 text-xs text-slate-500 dark:text-slate-400">
+      <img id="previewImg" class="h-16 rounded-xl object-cover" style="border: 1px solid var(--glass-border);">
+      <div class="flex-1 text-xs" style="color: var(--text-secondary);">
         <span id="previewName"></span>
-        <select id="analysisType" class="ml-2 text-xs px-2 py-1 rounded border border-slate-200 dark:border-slate-600 dark:bg-slate-700">
+        <select id="analysisType" class="neu-input ml-2 text-xs px-2 py-1">
           <option value="general">通用分析</option>
           <option value="waveform">波形诊断</option>
           <option value="model">模型解读</option>
           <option value="params">参数识别</option>
         </select>
       </div>
-      <button onclick="clearImage()" class="text-slate-400 hover:text-red-500"><i class="fa-solid fa-xmark"></i></button>
+      <button onclick="clearImage()" class="hover:text-red-500 transition" style="color: var(--text-muted);"><i class="fa-solid fa-xmark"></i></button>
     </div>
   </div>
 
   <!-- 输入区 -->
-  <div class="p-4 border-t border-slate-200 dark:border-slate-700 shrink-0">
+  <div class="p-4 shrink-0">
     <div class="max-w-3xl mx-auto">
-      <div id="dropZone" class="drop-zone flex items-end gap-2 p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus-within:border-brand-500 transition">
-        <label class="cursor-pointer text-slate-400 hover:text-brand-500 transition p-2" title="上传图片">
+      <div id="dropZone" class="drop-zone flex items-end gap-2 p-3 glass-card-strong transition" style="border-radius: 20px;">
+        <label class="cursor-pointer transition p-2 hover:text-[var(--accent)]" style="color: var(--text-muted);" title="上传图片">
           <i class="fa-solid fa-paperclip text-lg"></i>
           <input id="imageInput" type="file" accept="image/*" class="hidden" onchange="handleImageSelect(event)">
         </label>
         <textarea id="msgInput" rows="1" placeholder="输入问题或粘贴截图 (Ctrl+V)..."
           class="flex-1 bg-transparent resize-none outline-none text-sm max-h-32"
+          style="color: var(--text-primary);"
           onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
-        <button id="searchToggle" onclick="toggleSearch()" class="p-2 text-slate-400 hover:text-brand-500 transition" title="联网搜索（点击切换）">
+        <button id="searchToggle" onclick="toggleSearch()" class="p-2 transition hover:text-[var(--accent)]" style="color: var(--text-muted);" title="联网搜索（点击切换）">
           <i class="fa-solid fa-globe text-lg"></i>
         </button>
-        <button id="imageGenBtn" onclick="generateImage()" class="p-2 text-slate-400 hover:text-purple-500 transition" title="AI 生成示意图（描述场景后点击）">
+        <button id="imageGenBtn" onclick="generateImage()" class="p-2 transition hover:text-purple-500" style="color: var(--text-muted);" title="AI 生成示意图（描述场景后点击）">
           <i class="fa-solid fa-palette text-lg"></i>
         </button>
-        <button id="sendBtn" onclick="sendMessage()" class="p-2 text-brand-500 hover:text-brand-600 transition disabled:opacity-40" title="发送 (Enter)">
+        <button id="sendBtn" onclick="sendMessage()" class="p-2 transition disabled:opacity-40" style="color: var(--accent);" title="发送 (Enter)">
           <i class="fa-solid fa-paper-plane text-lg"></i>
         </button>
       </div>
-      <p class="text-xs text-slate-400 mt-2 text-center">Enter 发送 · Shift+Enter 换行 · Ctrl+V 粘贴截图 · <span id="searchLabel" class="cursor-pointer hover:text-brand-500" onclick="toggleSearch()">🌐 联网搜索：关</span></p>
+      <p class="text-xs mt-2 text-center" style="color: var(--text-muted);">Enter 发送 · Shift+Enter 换行 · Ctrl+V 粘贴截图 · <span id="searchLabel" class="cursor-pointer hover:text-[var(--accent)]" onclick="toggleSearch()">🌐 联网搜索：关</span></p>
     </div>
   </div>
 </main>
 
 <!-- ─── 使用说明弹窗 ─── -->
-<div id="guideModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 backdrop-blur-sm" onclick="if(event.target===this)closeGuide()">
-  <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-[90vw] max-w-3xl max-h-[85vh] flex flex-col overflow-hidden fade-in">
+<div id="guideModal" class="fixed inset-0 z-50 hidden items-center justify-center" style="background: rgba(45,50,80,0.3); backdrop-filter: blur(8px);" onclick="if(event.target===this)closeGuide()">
+  <div class="glass-card-strong shadow-2xl w-[90vw] max-w-3xl max-h-[85vh] flex flex-col overflow-hidden fade-in">
     <!-- 头部 -->
-    <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-r from-brand-500 to-blue-600 text-white flex items-center justify-between shrink-0">
-      <div>
+    <div class="px-6 py-4 flex items-center justify-between shrink-0" style="background: linear-gradient(135deg, var(--accent), #60a5fa); border-radius: 16px 16px 0 0;">
+      <div class="text-white">
         <h2 class="text-lg font-bold flex items-center gap-2"><i class="fa-solid fa-book-open"></i> 使用说明</h2>
         <p class="text-xs opacity-80 mt-0.5">柔直仿真 AI 辅助知识系统 · 快速上手指南</p>
       </div>
@@ -233,97 +427,98 @@ tailwind.config = {
 
       <!-- 系统简介 -->
       <section>
-        <h3 class="text-base font-bold text-brand-600 dark:text-brand-400 mb-2 flex items-center gap-2"><i class="fa-solid fa-info-circle"></i> 系统简介</h3>
+        <h3 class="text-base font-bold mb-2 flex items-center gap-2" style="color: var(--accent);"><i class="fa-solid fa-info-circle"></i> 系统简介</h3>
         <p>本系统是一个 <strong>MMC 两端柔性直流输电仿真辅助平台</strong>，专为 MATLAB/Simulink 仿真任务设计。通过 AI 大模型提供：</p>
-        <ul class="list-disc ml-5 mt-2 space-y-1 text-slate-600 dark:text-slate-300">
+        <ul class="list-disc ml-5 mt-2 space-y-1" style="color: var(--text-secondary);">
           <li><strong>智能问答</strong> — 输入任何关于 MMC、控制策略、仿真操作的问题</li>
           <li><strong>截图分析</strong> — 上传 Simulink 模型截图或波形截图，AI 自动解读</li>
           <li><strong>参数推荐</strong> — 根据电压等级和容量推荐 MMC 子模块参数</li>
           <li><strong>故障排查</strong> — 描述仿真异常现象，AI 提供诊断和解决方案</li>
         </ul>
-        <div class="mt-3 px-4 py-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border-l-4 border-brand-500 text-xs text-slate-600 dark:text-slate-300">
+        <div class="mt-3 px-4 py-3 glass-card text-xs" style="color: var(--text-secondary); border-left: 3px solid var(--accent);">
           <strong>AI 模型：</strong>
           <ul class="mt-1 space-y-0.5 ml-2">
-            <li>• 文本对话与图片分析：<code class="bg-white/50 dark:bg-slate-700 px-1 rounded">Qwen3.5-Flash</code>（输入 ¥0.2/百万tokens，输出 ¥2/百万tokens，100万免费额度）</li>
-            <li>• 图像生成（可选）：<code class="bg-white/50 dark:bg-slate-700 px-1 rounded">Qwen-Image-2.0</code>（¥0.2/张，100张免费额度）</li>
+            <li>• 文本对话与图片分析：<code style="background: rgba(124,92,252,0.08); color: var(--accent-dark); padding: 1px 5px; border-radius: 4px;">Qwen3.6-Plus</code>（输入 ¥2/百万tokens，输出 ¥12/百万tokens，支持深度思考，100万免费额度）</li>
+            <li>• 图像生成（可选）：<code style="background: rgba(124,92,252,0.08); color: var(--accent-dark); padding: 1px 5px; border-radius: 4px;">Wan2.7-Image</code>（¥0.2/张，50张免费额度）</li>
           </ul>
         </div>
       </section>
 
       <!-- 界面说明 -->
       <section>
-        <h3 class="text-base font-bold text-brand-600 dark:text-brand-400 mb-2 flex items-center gap-2"><i class="fa-solid fa-desktop"></i> 界面说明</h3>
+        <h3 class="text-base font-bold mb-2 flex items-center gap-2" style="color: var(--accent);"><i class="fa-solid fa-desktop"></i> 界面说明</h3>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div class="p-3 rounded-xl border border-slate-200 dark:border-slate-700">
-            <p class="font-medium mb-1"><i class="fa-solid fa-bolt text-brand-500 mr-1"></i> 快捷指令（左上）</p>
-            <p class="text-xs text-slate-500 dark:text-slate-400">6 个常用功能按钮，点击后自动填入问题并发送：分析波形、解读模型、推荐参数、下一步操作、故障排查、控制策略。</p>
+          <div class="glass-card p-3">
+            <p class="font-medium mb-1"><i class="fa-solid fa-bolt mr-1" style="color: var(--accent);"></i> 快捷指令（左上）</p>
+            <p class="text-xs" style="color: var(--text-muted);">6 个常用功能按钮，点击后自动填入问题并发送：分析波形、解读模型、推荐参数、下一步操作、故障排查、控制策略。</p>
           </div>
-          <div class="p-3 rounded-xl border border-slate-200 dark:border-slate-700">
-            <p class="font-medium mb-1"><i class="fa-solid fa-list text-brand-500 mr-1"></i> 知识库目录（左中）</p>
-            <p class="text-xs text-slate-500 dark:text-slate-400">展示系统内置的 52 个知识主题，涵盖 MMC 理论、模型结构、仿真操作、工程案例、故障排查。点击任一主题，自动填入相关提问。</p>
+          <div class="glass-card p-3">
+            <p class="font-medium mb-1"><i class="fa-solid fa-list mr-1" style="color: var(--accent);"></i> 知识库目录（左中）</p>
+            <p class="text-xs" style="color: var(--text-muted);">展示系统内置的 52 个知识主题，涵盖 MMC 理论、模型结构、仿真操作、工程案例、故障排查。点击任一主题，自动填入相关提问。</p>
           </div>
-          <div class="p-3 rounded-xl border border-slate-200 dark:border-slate-700">
-            <p class="font-medium mb-1"><i class="fa-solid fa-sliders text-brand-500 mr-1"></i> 参数推荐（左下）</p>
-            <p class="text-xs text-slate-500 dark:text-slate-400">提供 3 个预设工程场景（低/中/高压），也支持自定义输入直流电压和容量，自动计算子模块数 N、子模块电容 Csm、桥臂电抗 Larm 等参数。</p>
+          <div class="glass-card p-3">
+            <p class="font-medium mb-1"><i class="fa-solid fa-sliders mr-1" style="color: var(--accent);"></i> 参数推荐（左下）</p>
+            <p class="text-xs" style="color: var(--text-muted);">提供 3 个预设工程场景（低/中/高压），也支持自定义输入直流电压和容量，自动计算子模块数 N、子模块电容 Csm、桥臂电抗 Larm 等参数。</p>
           </div>
-          <div class="p-3 rounded-xl border border-slate-200 dark:border-slate-700">
-            <p class="font-medium mb-1"><i class="fa-solid fa-message text-brand-500 mr-1"></i> 对话区（右侧主区域）</p>
-            <p class="text-xs text-slate-500 dark:text-slate-400">与 AI 进行对话的主界面，支持文字输入和图片上传。AI 回复以 Markdown 格式渲染，支持数学公式（KaTeX）和代码高亮。</p>
+          <div class="glass-card p-3">
+            <p class="font-medium mb-1"><i class="fa-solid fa-message mr-1" style="color: var(--accent);"></i> 对话区（右侧主区域）</p>
+            <p class="text-xs" style="color: var(--text-muted);">与 AI 进行对话的主界面，支持文字输入和图片上传。AI 回复以 Markdown 格式渲染，支持数学公式（KaTeX）和代码高亮。</p>
           </div>
         </div>
       </section>
 
       <!-- 操作指南 -->
       <section>
-        <h3 class="text-base font-bold text-brand-600 dark:text-brand-400 mb-2 flex items-center gap-2"><i class="fa-solid fa-keyboard"></i> 操作指南</h3>
-        <table class="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-          <thead><tr class="bg-slate-100 dark:bg-slate-700"><th class="px-3 py-2 text-left">操作</th><th class="px-3 py-2 text-left">方式</th><th class="px-3 py-2 text-left">说明</th></tr></thead>
-          <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
-            <tr><td class="px-3 py-2 font-medium">发送消息</td><td class="px-3 py-2"><kbd class="bg-slate-200 dark:bg-slate-600 px-1.5 py-0.5 rounded text-[10px]">Enter</kbd></td><td class="px-3 py-2">在输入框输入问题后按 Enter 发送</td></tr>
-            <tr><td class="px-3 py-2 font-medium">换行</td><td class="px-3 py-2"><kbd class="bg-slate-200 dark:bg-slate-600 px-1.5 py-0.5 rounded text-[10px]">Shift+Enter</kbd></td><td class="px-3 py-2">在输入框内换行，不发送</td></tr>
-            <tr><td class="px-3 py-2 font-medium">粘贴截图</td><td class="px-3 py-2"><kbd class="bg-slate-200 dark:bg-slate-600 px-1.5 py-0.5 rounded text-[10px]">Ctrl+V</kbd></td><td class="px-3 py-2">在任意位置粘贴剪贴板中的截图</td></tr>
-            <tr><td class="px-3 py-2 font-medium">上传图片</td><td class="px-3 py-2"><i class="fa-solid fa-paperclip"></i> 按钮</td><td class="px-3 py-2">点击输入框左侧的回形针图标选择图片</td></tr>
-            <tr><td class="px-3 py-2 font-medium">拖拽图片</td><td class="px-3 py-2">拖入输入框</td><td class="px-3 py-2">将图片文件拖入输入区域</td></tr>
-            <tr><td class="px-3 py-2 font-medium">分析类型</td><td class="px-3 py-2">下拉菜单</td><td class="px-3 py-2">上传图片后出现：通用分析 / 波形诊断 / 模型解读 / 参数识别</td></tr>
-            <tr><td class="px-3 py-2 font-medium">切换主题</td><td class="px-3 py-2"><i class="fa-solid fa-circle-half-stroke"></i> 按钮</td><td class="px-3 py-2">左下角，切换浅色/深色模式</td></tr>
-            <tr><td class="px-3 py-2 font-medium">清空对话</td><td class="px-3 py-2"><i class="fa-solid fa-trash-can"></i> 清空</td><td class="px-3 py-2">清除所有历史对话记录</td></tr>
-            <tr><td class="px-3 py-2 font-medium">生成示意图</td><td class="px-3 py-2"><i class="fa-solid fa-palette"></i> 按钮</td><td class="px-3 py-2">输入描述后点击调色板图标，AI 生成参考示意图</td></tr>
-            <tr><td class="px-3 py-2 font-medium">联网搜索</td><td class="px-3 py-2"><i class="fa-solid fa-globe"></i> 按钮</td><td class="px-3 py-2">开启后 AI 结合互联网信息回答问题</td></tr>
-            <tr><td class="px-3 py-2 font-medium">费用管理</td><td class="px-3 py-2">顶栏进度条</td><td class="px-3 py-2">点击进度条可修改总预算或重置费用统计</td></tr>
-          </tbody>
-        </table>
+        <h3 class="text-base font-bold mb-2 flex items-center gap-2" style="color: var(--accent);"><i class="fa-solid fa-keyboard"></i> 操作指南</h3>
+        <div class="glass-card overflow-hidden" style="border-radius: 12px;">
+          <table class="w-full text-xs">
+            <thead><tr style="background: rgba(124,92,252,0.06);"><th class="px-3 py-2 text-left" style="color: var(--accent-dark);">操作</th><th class="px-3 py-2 text-left" style="color: var(--accent-dark);">方式</th><th class="px-3 py-2 text-left" style="color: var(--accent-dark);">说明</th></tr></thead>
+            <tbody class="divide-y" style="--tw-divide-opacity: 1; --tw-divide-color: rgba(124,92,252,0.08);">
+              <tr><td class="px-3 py-2 font-medium">发送消息</td><td class="px-3 py-2"><kbd class="neu-btn px-1.5 py-0.5 text-[10px]">Enter</kbd></td><td class="px-3 py-2">在输入框输入问题后按 Enter 发送</td></tr>
+              <tr><td class="px-3 py-2 font-medium">换行</td><td class="px-3 py-2"><kbd class="neu-btn px-1.5 py-0.5 text-[10px]">Shift+Enter</kbd></td><td class="px-3 py-2">在输入框内换行，不发送</td></tr>
+              <tr><td class="px-3 py-2 font-medium">粘贴截图</td><td class="px-3 py-2"><kbd class="neu-btn px-1.5 py-0.5 text-[10px]">Ctrl+V</kbd></td><td class="px-3 py-2">在任意位置粘贴剪贴板中的截图</td></tr>
+              <tr><td class="px-3 py-2 font-medium">上传图片</td><td class="px-3 py-2"><i class="fa-solid fa-paperclip"></i> 按钮</td><td class="px-3 py-2">点击输入框左侧的回形针图标选择图片</td></tr>
+              <tr><td class="px-3 py-2 font-medium">拖拽图片</td><td class="px-3 py-2">拖入输入框</td><td class="px-3 py-2">将图片文件拖入输入区域</td></tr>
+              <tr><td class="px-3 py-2 font-medium">分析类型</td><td class="px-3 py-2">下拉菜单</td><td class="px-3 py-2">上传图片后出现：通用分析 / 波形诊断 / 模型解读 / 参数识别</td></tr>
+              <tr><td class="px-3 py-2 font-medium">清空对话</td><td class="px-3 py-2"><i class="fa-solid fa-trash-can"></i> 清空</td><td class="px-3 py-2">清除所有历史对话记录</td></tr>
+              <tr><td class="px-3 py-2 font-medium">生成示意图</td><td class="px-3 py-2"><i class="fa-solid fa-palette"></i> 按钮</td><td class="px-3 py-2">输入描述后点击调色板图标，AI 生成参考示意图</td></tr>
+              <tr><td class="px-3 py-2 font-medium">联网搜索</td><td class="px-3 py-2"><i class="fa-solid fa-globe"></i> 按钮</td><td class="px-3 py-2">开启后 AI 结合互联网信息回答问题</td></tr>
+              <tr><td class="px-3 py-2 font-medium">费用管理</td><td class="px-3 py-2">顶栏进度条</td><td class="px-3 py-2">点击进度条可修改总预算或重置费用统计</td></tr>
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <!-- 典型使用场景 -->
       <section>
-        <h3 class="text-base font-bold text-brand-600 dark:text-brand-400 mb-2 flex items-center gap-2"><i class="fa-solid fa-lightbulb"></i> 典型使用场景</h3>
+        <h3 class="text-base font-bold mb-2 flex items-center gap-2" style="color: var(--accent);"><i class="fa-solid fa-lightbulb"></i> 典型使用场景</h3>
         <div class="space-y-3">
           <div class="flex gap-3 items-start">
-            <span class="shrink-0 w-7 h-7 rounded-full bg-brand-100 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 flex items-center justify-center text-xs font-bold">1</span>
+            <span class="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white" style="background: linear-gradient(135deg, var(--accent), #60a5fa);">1</span>
             <div>
               <p class="font-medium">仿真过程中波形异常</p>
-              <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">截图 Simulink 波形 → Ctrl+V 粘贴 → 选择"波形诊断" → 输入"P有功功率震荡" → AI 分析原因并给出 PI 参数调整建议</p>
+              <p class="text-xs mt-0.5" style="color: var(--text-muted);">截图 Simulink 波形 → Ctrl+V 粘贴 → 选择"波形诊断" → 输入"P有功功率震荡" → AI 分析原因并给出 PI 参数调整建议</p>
             </div>
           </div>
           <div class="flex gap-3 items-start">
-            <span class="shrink-0 w-7 h-7 rounded-full bg-brand-100 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 flex items-center justify-center text-xs font-bold">2</span>
+            <span class="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white" style="background: linear-gradient(135deg, var(--accent), #60a5fa);">2</span>
             <div>
               <p class="font-medium">不理解模型结构</p>
-              <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">截图模型拓扑 → 选择"模型解读" → AI 识别各模块功能、信号流向、控制策略</p>
+              <p class="text-xs mt-0.5" style="color: var(--text-muted);">截图模型拓扑 → 选择"模型解读" → AI 识别各模块功能、信号流向、控制策略</p>
             </div>
           </div>
           <div class="flex gap-3 items-start">
-            <span class="shrink-0 w-7 h-7 rounded-full bg-brand-100 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 flex items-center justify-center text-xs font-bold">3</span>
+            <span class="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white" style="background: linear-gradient(135deg, var(--accent), #60a5fa);">3</span>
             <div>
               <p class="font-medium">新建仿真需要参数</p>
-              <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">左下角参数推荐 → 选择预设场景或输入电压/容量 → 获取 N、Csm、Larm 等完整参数</p>
+              <p class="text-xs mt-0.5" style="color: var(--text-muted);">左下角参数推荐 → 选择预设场景或输入电压/容量 → 获取 N、Csm、Larm 等完整参数</p>
             </div>
           </div>
           <div class="flex gap-3 items-start">
-            <span class="shrink-0 w-7 h-7 rounded-full bg-brand-100 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 flex items-center justify-center text-xs font-bold">4</span>
+            <span class="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white" style="background: linear-gradient(135deg, var(--accent), #60a5fa);">4</span>
             <div>
               <p class="font-medium">需要操作指导</p>
-              <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">输入"如何添加直流电压源替代光伏基地" → AI 给出完整 Simulink 操作步骤</p>
+              <p class="text-xs mt-0.5" style="color: var(--text-muted);">输入"如何添加直流电压源替代光伏基地" → AI 给出完整 Simulink 操作步骤</p>
             </div>
           </div>
         </div>
@@ -331,18 +526,18 @@ tailwind.config = {
 
       <!-- 底部状态说明 -->
       <section>
-        <h3 class="text-base font-bold text-brand-600 dark:text-brand-400 mb-2 flex items-center gap-2"><i class="fa-solid fa-circle-info"></i> 状态指示</h3>
+        <h3 class="text-base font-bold mb-2 flex items-center gap-2" style="color: var(--accent);"><i class="fa-solid fa-circle-info"></i> 状态指示</h3>
         <div class="flex flex-wrap gap-4 text-xs">
           <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-green-500"></span> API 就绪，可正常使用</span>
           <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-red-500"></span> API Key 未配置或连接失败</span>
           <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-gray-400"></span> 正在检测连接状态</span>
         </div>
-        <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">对话记录自动保存在浏览器 localStorage 中（最近 100 条），关闭浏览器后不会丢失。</p>
+        <p class="mt-2 text-xs" style="color: var(--text-muted);">对话记录自动保存在浏览器 localStorage 中（最近 100 条），关闭浏览器后不会丢失。</p>
       </section>
     </div>
     <!-- 底部 -->
-    <div class="px-6 py-3 border-t border-slate-200 dark:border-slate-700 flex justify-end shrink-0">
-      <button onclick="closeGuide()" class="px-5 py-2 bg-brand-500 text-white text-sm rounded-lg hover:bg-brand-600 transition">我知道了</button>
+    <div class="px-6 py-3 flex justify-end shrink-0" style="border-top: 1px solid var(--glass-border);">
+      <button onclick="closeGuide()" class="glow-btn px-5 py-2 text-sm">我知道了</button>
     </div>
   </div>
 </div>
@@ -363,7 +558,7 @@ let totalBudget = parseFloat(localStorage.getItem('fdcBudget') || '13.52');
 let imageGenCount = parseInt(localStorage.getItem('fdcImageGenCount') || '0');
 let assistantName = localStorage.getItem('fdcAssistantName') || '小助理';
 // 模型计费 (元/百万tokens)
-const PRICING = { input: 0.2, output: 2.0, imageGen: 0.2 };
+const PRICING = { input: 2.0, output: 12.0, imageGen: 0.2 };
 const API = '';
 
 // ─── Init ───
@@ -372,7 +567,6 @@ document.addEventListener('DOMContentLoaded', () => {
   loadKnowledgeNav();
   loadScenarios();
   restoreChat();
-  initDark();
   setupPaste();
   setupDragDrop();
   initBudget();
@@ -386,16 +580,18 @@ async function checkStatus() {
     const dot = document.getElementById('statusDot');
     const apiSt = document.getElementById('apiStatus');
     if (d.api_key_configured) {
-      dot.className = 'w-2 h-2 rounded-full bg-green-500';
+      dot.className = 'w-2.5 h-2.5 rounded-full bg-green-500';
+      dot.style.animation = 'pulseRing 2s infinite';
       apiSt.textContent = `API 就绪 · ${d.knowledge_topics} 知识主题`;
-      apiSt.className = 'text-xs px-2 py-0.5 rounded-full bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400';
+      apiSt.className = 'status-badge text-green-600';
     } else {
-      dot.className = 'w-2 h-2 rounded-full bg-red-500';
+      dot.className = 'w-2.5 h-2.5 rounded-full bg-red-500';
+      dot.style.animation = 'pulseRing 2s infinite';
       apiSt.textContent = 'API Key 未配置';
-      apiSt.className = 'text-xs px-2 py-0.5 rounded-full bg-red-50 dark:bg-red-900/30 text-red-500';
+      apiSt.className = 'status-badge text-red-500';
     }
   } catch(e) {
-    document.getElementById('statusDot').className = 'w-2 h-2 rounded-full bg-red-500';
+    document.getElementById('statusDot').className = 'w-2.5 h-2.5 rounded-full bg-red-500';
     document.getElementById('apiStatus').textContent = '连接失败';
   }
 }
@@ -410,11 +606,11 @@ async function loadKnowledgeNav() {
     nav.innerHTML = topics.map(t => {
       let icon = 'fa-file-lines';
       for(const[k,v] of Object.entries(icons)) { if(t.title.includes(k)){icon=v;break;} }
-      return `<button class="nav-item w-full text-left px-3 py-2 rounded-lg text-xs flex items-center gap-2 transition"
+      return `<button class="nav-item w-full text-left px-3 py-2 text-xs flex items-center gap-2"
         onclick="askTopic('${t.title.replace(/'/g,"\\'")}')">
-        <i class="fa-solid ${icon} text-slate-400 w-4"></i>
+        <i class="fa-solid ${icon} w-4" style="color: var(--accent-light);"></i>
         <span class="truncate">${t.title}</span>
-        <span class="ml-auto text-slate-400 text-[10px]">${t.source}</span>
+        <span class="ml-auto text-[10px]" style="color: var(--text-muted);">${t.source}</span>
       </button>`;
     }).join('');
   } catch(e) { console.warn('知识库加载失败', e); }
@@ -463,13 +659,13 @@ async function calcCustom() {
 function showParams(d) {
   const el = document.getElementById('paramResult');
   el.classList.remove('hidden');
-  let html = `<p class="font-medium text-brand-600 dark:text-brand-400">${d.name || '自定义计算'}</p>`;
-  if(d.description) html += `<p class="text-slate-500">${d.description}</p>`;
+  let html = `<p class="font-medium" style="color: var(--accent);">${d.name || '自定义计算'}</p>`;
+  if(d.description) html += `<p style="color: var(--text-muted);">${d.description}</p>`;
   const p = d.params || d;
   const labels = {Udc:'直流电压',P_rated:'额定容量',N:'子模块数',Csm:'子模块电容',Larm:'桥臂电抗',fsw:'开关频率',Usm:'子模块电压'};
   for(const[k,v] of Object.entries(p)) {
     if(typeof v === 'object') continue;
-    html += `<div class="flex justify-between"><span class="text-slate-500">${labels[k]||k}</span><span class="font-mono">${v}</span></div>`;
+    html += `<div class="flex justify-between"><span style="color: var(--text-muted);">${labels[k]||k}</span><span class="font-mono">${v}</span></div>`;
   }
   el.innerHTML = html;
 }
@@ -540,6 +736,7 @@ async function streamRequest(endpoint, body, msgEl) {
   const reader = resp.body.getReader();
   const decoder = new TextDecoder();
   let full = '';
+  let thinkingText = '';
   let buffer = '';
 
   while(true) {
@@ -555,9 +752,12 @@ async function streamRequest(endpoint, body, msgEl) {
       try {
         const j = JSON.parse(data);
         if(j.error) throw new Error(j.error);
-        if(j.content) {
+        if(j.thinking) {
+          thinkingText += j.thinking;
+          setMessageContent(msgEl, full, thinkingText);
+        } else if(j.content) {
           full += j.content;
-          setMessageContent(msgEl, full);
+          setMessageContent(msgEl, full, thinkingText);
         }
       } catch(e) {
         if(e.message && !e.message.includes('JSON')) throw e;
@@ -577,7 +777,7 @@ function appendMessage(role, text, imageBase64, streaming) {
   wrap.className = `max-w-3xl mx-auto fade-in ${role === 'user' ? 'flex justify-end' : ''}`;
 
   const bubble = document.createElement('div');
-  bubble.className = `rounded-2xl px-4 py-3 text-sm ${role === 'user' ? 'msg-user max-w-[80%]' : 'msg-ai w-full'} ${role === 'ai' ? 'prose dark:prose-invert max-w-none' : ''}`;
+  bubble.className = `px-4 py-3 text-sm ${role === 'user' ? 'msg-user max-w-[80%]' : 'msg-ai w-full'} ${role === 'ai' ? 'prose max-w-none' : ''}`;
 
   if(imageBase64 && role === 'user') {
     const img = document.createElement('img');
@@ -588,7 +788,7 @@ function appendMessage(role, text, imageBase64, streaming) {
 
   const contentDiv = document.createElement('div');
   if(role === 'ai' && streaming) {
-    contentDiv.innerHTML = '<span class="typing-dot inline-block w-2 h-2 bg-brand-500 rounded-full"></span><span class="typing-dot inline-block w-2 h-2 bg-brand-500 rounded-full ml-1"></span><span class="typing-dot inline-block w-2 h-2 bg-brand-500 rounded-full ml-1"></span>';
+    contentDiv.innerHTML = '<span class="typing-dot inline-block w-2 h-2 rounded-full ml-1" style="background: var(--accent);"></span><span class="typing-dot inline-block w-2 h-2 rounded-full ml-1" style="background: var(--accent);"></span><span class="typing-dot inline-block w-2 h-2 rounded-full ml-1" style="background: var(--accent);"></span>';
   } else if(role === 'user') {
     contentDiv.textContent = text;
   } else {
@@ -599,7 +799,7 @@ function appendMessage(role, text, imageBase64, streaming) {
   if(role === 'ai') {
     const icon = document.createElement('div');
     icon.className = 'flex items-center gap-2 mb-2';
-    icon.innerHTML = `<span class="w-6 h-6 rounded-full bg-gradient-to-br from-brand-500 to-blue-600 flex items-center justify-center"><i class="fa-solid fa-bolt text-white text-xs"></i></span><span class="text-xs font-medium text-slate-500 dark:text-slate-400 cursor-pointer hover:text-brand-500" onclick="editAssistantName()" title="点击修改名称">${assistantName}</span>`;
+    icon.innerHTML = `<span class="w-6 h-6 rounded-full flex items-center justify-center" style="background: linear-gradient(135deg, var(--accent), #60a5fa); box-shadow: 0 2px 8px var(--accent-glow);"><i class="fa-solid fa-bolt text-white text-xs"></i></span><span class="text-xs font-medium cursor-pointer hover:text-[var(--accent)]" style="color: var(--text-muted);" onclick="editAssistantName()" title="点击修改名称">${assistantName}</span>`;
     const container = document.createElement('div');
     container.appendChild(icon);
     container.appendChild(bubble);
@@ -620,11 +820,24 @@ function appendMessage(role, text, imageBase64, streaming) {
   return contentDiv;
 }
 
-function setMessageContent(el, md) {
+function setMessageContent(el, md, thinkingText) {
   // 提取 token 用量信息
   const tokenMatch = md.match(/<!-- tokens: prompt=(\d+), completion=(\d+), total=(\d+) -->/);
   const cleanMd = md.replace(/\n*<!-- tokens:.*?-->/g, '');
-  el.innerHTML = renderMd(cleanMd);
+
+  let html = '';
+  // 思考过程折叠显示
+  if(thinkingText) {
+    const thinkClean = thinkingText.replace(/\n*<!-- tokens:.*?-->/g, '');
+    html += `<details class="mb-3 glass-card overflow-hidden" style="border-left: 3px solid var(--accent);">
+      <summary class="cursor-pointer px-3 py-2 text-xs font-medium select-none transition" style="color: var(--accent);">
+        <i class="fa-solid fa-brain mr-1"></i>思考过程 <span style="color: var(--accent-light);">(${thinkClean.length} 字)</span>
+      </summary>
+      <div class="px-3 py-2 text-xs whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto scrollbar-thin" style="color: var(--text-secondary); border-top: 1px solid var(--glass-border);">${escapeHtml(thinkClean)}</div>
+    </details>`;
+  }
+  html += renderMd(cleanMd);
+  el.innerHTML = html;
   if(tokenMatch) {
     const promptTk = parseInt(tokenMatch[1]);
     const completionTk = parseInt(tokenMatch[2]);
@@ -640,19 +853,25 @@ function setMessageContent(el, md) {
     localStorage.setItem('fdcInputTokens', totalInputTokens);
     localStorage.setItem('fdcOutputTokens', totalOutputTokens);
     localStorage.setItem('fdcCost', totalCost);
-    // 更新token计数
     document.getElementById('tokenCounter').classList.remove('hidden');
     document.getElementById('tokenCount').textContent = totalTokens.toLocaleString();
     // 更新费用进度条
     updateBudgetBar();
     // 单条消息费用标签
     const badge = document.createElement('div');
-    badge.className = 'mt-2 text-[10px] text-slate-400 dark:text-slate-500 flex items-center gap-3';
-    badge.innerHTML = `<i class="fa-solid fa-coins"></i> ${thisTotal} tokens（输入 ${promptTk} + 输出 ${completionTk}）· ¥${thisCost.toFixed(4)}`;
+    badge.className = 'mt-2 text-[10px] flex items-center gap-3';
+    badge.style.color = 'var(--text-muted)';
+    badge.innerHTML = `<i class="fa-solid fa-coins" style="color: var(--accent-light);"></i> ${thisTotal} tokens（输入 ${promptTk} + 输出 ${completionTk}）· ¥${thisCost.toFixed(4)}`;
     el.parentElement.appendChild(badge);
   }
   const area = document.getElementById('chatArea');
   area.scrollTop = area.scrollHeight;
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
 }
 
 function renderMd(text) {
@@ -700,9 +919,9 @@ function restoreChat() {
     if(m.role === 'assistant' && m.images && m.images.length) {
       // 恢复图像生成消息
       const el = appendMessage('ai', '');
-      let html = `<p class="mb-2 font-medium text-purple-600 dark:text-purple-400"><i class="fa-solid fa-palette mr-1"></i> AI 生成参考图</p>`;
+      let html = `<p class="mb-2 font-medium" style="color: var(--accent);"><i class="fa-solid fa-palette mr-1"></i> AI 生成参考图</p>`;
       m.images.forEach((url, i) => {
-        html += `<img src="${url}" class="max-w-full rounded-xl border border-slate-200 dark:border-slate-700 mb-2 cursor-pointer" onclick="window.open(this.src)" title="点击查看原图" alt="AI生成图像 ${i+1}">`;
+        html += `<img src="${url}" class="max-w-full rounded-xl mb-2 cursor-pointer" style="border: 1px solid var(--glass-border);" onclick="window.open(this.src)" title="点击查看原图" alt="AI生成图像 ${i+1}">`;
       });
       el.innerHTML = html;
     } else {
@@ -759,11 +978,11 @@ function renderConvList() {
   if(!el) return;
   const sorted = [...convList].sort((a,b) => b.time - a.time);
   el.innerHTML = sorted.map(c => `
-    <button class="nav-item w-full text-left px-3 py-2 rounded-lg text-xs flex items-center gap-2 transition group ${c.id === currentConvId ? 'bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400' : ''}"
+    <button class="nav-item w-full text-left px-3 py-2 text-xs flex items-center gap-2 group ${c.id === currentConvId ? 'active' : ''}"
       onclick="switchConv('${c.id}')">
-      <i class="fa-solid fa-message text-slate-400 w-4 shrink-0"></i>
+      <i class="fa-solid fa-message w-4 shrink-0" style="color: var(--accent-light);"></i>
       <span class="truncate flex-1">${c.title || '新对话'}</span>
-      <span class="text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 shrink-0" onclick="deleteConv('${c.id}', event)" title="删除"><i class="fa-solid fa-xmark text-[10px]"></i></span>
+      <span class="hover:text-red-500 opacity-0 group-hover:opacity-100 shrink-0" style="color: var(--text-muted);" onclick="deleteConv('${c.id}', event)" title="删除"><i class="fa-solid fa-xmark text-[10px]"></i></span>
     </button>
   `).join('');
 }
@@ -772,26 +991,32 @@ function showWelcome() {
   const area = document.getElementById('chatArea');
   area.innerHTML = `
     <div class="max-w-3xl mx-auto text-center py-8 fade-in">
-      <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-brand-500 to-blue-600 flex items-center justify-center">
-        <i class="fa-solid fa-bolt text-white text-2xl"></i>
+      <div class="w-20 h-20 mx-auto mb-5 rounded-2xl flex items-center justify-center" style="background: linear-gradient(135deg, var(--accent), #60a5fa); box-shadow: 0 8px 30px var(--accent-glow);">
+        <i class="fa-solid fa-bolt text-white text-3xl"></i>
       </div>
-      <h2 class="text-xl font-bold mb-2">柔直仿真 AI 辅助知识系统</h2>
-      <p class="text-slate-500 dark:text-slate-400 text-sm mb-6">基于 MMC 两端柔直系统仿真模型，提供智能问答、截图分析、参数推荐等功能</p>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-3 max-w-2xl mx-auto text-left">
-        <div class="p-3 rounded-xl border border-slate-200 dark:border-slate-700">
-          <i class="fa-solid fa-message text-brand-500 mb-2"></i>
-          <p class="text-xs font-medium">智能问答</p>
-          <p class="text-xs text-slate-500 dark:text-slate-400">询问 MMC 原理、控制策略、仿真操作等</p>
+      <h2 class="text-2xl font-bold mb-2 accent-gradient">柔直仿真 AI 辅助知识系统</h2>
+      <p class="text-sm mb-8" style="color: var(--text-secondary);">基于 MMC 两端柔直系统仿真模型，提供智能问答、截图分析、参数推荐等功能</p>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-2xl mx-auto text-left">
+        <div class="glass-card p-4 hover:scale-[1.02] transition-transform cursor-default">
+          <div class="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style="background: rgba(124,92,252,0.1);">
+            <i class="fa-solid fa-message" style="color: var(--accent);"></i>
+          </div>
+          <p class="text-sm font-medium mb-1">智能问答</p>
+          <p class="text-xs" style="color: var(--text-muted);">询问 MMC 原理、控制策略、仿真操作等</p>
         </div>
-        <div class="p-3 rounded-xl border border-slate-200 dark:border-slate-700">
-          <i class="fa-solid fa-image text-brand-500 mb-2"></i>
-          <p class="text-xs font-medium">截图分析</p>
-          <p class="text-xs text-slate-500 dark:text-slate-400">上传 Simulink 截图，AI 解读模型与波形</p>
+        <div class="glass-card p-4 hover:scale-[1.02] transition-transform cursor-default">
+          <div class="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style="background: rgba(124,92,252,0.1);">
+            <i class="fa-solid fa-image" style="color: var(--accent);"></i>
+          </div>
+          <p class="text-sm font-medium mb-1">截图分析</p>
+          <p class="text-xs" style="color: var(--text-muted);">上传 Simulink 截图，AI 解读模型与波形</p>
         </div>
-        <div class="p-3 rounded-xl border border-slate-200 dark:border-slate-700">
-          <i class="fa-solid fa-calculator text-brand-500 mb-2"></i>
-          <p class="text-xs font-medium">参数推荐</p>
-          <p class="text-xs text-slate-500 dark:text-slate-400">根据电压等级和容量推荐 MMC 参数</p>
+        <div class="glass-card p-4 hover:scale-[1.02] transition-transform cursor-default">
+          <div class="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style="background: rgba(124,92,252,0.1);">
+            <i class="fa-solid fa-calculator" style="color: var(--accent);"></i>
+          </div>
+          <p class="text-sm font-medium mb-1">参数推荐</p>
+          <p class="text-xs" style="color: var(--text-muted);">根据电压等级和容量推荐 MMC 参数</p>
         </div>
       </div>
     </div>`;
@@ -883,30 +1108,23 @@ function setupDragDrop() {
   });
 }
 
-// ─── Theme ───
-function initDark() {
-  if(localStorage.getItem('fdcDark') === 'true') document.documentElement.classList.add('dark');
-}
-function toggleDark() {
-  document.documentElement.classList.toggle('dark');
-  localStorage.setItem('fdcDark', document.documentElement.classList.contains('dark'));
-}
-
 // ─── Search Toggle ───
 function toggleSearch() {
   enableSearch = !enableSearch;
   const btn = document.getElementById('searchToggle');
   const label = document.getElementById('searchLabel');
   if(enableSearch) {
-    btn.className = 'p-2 text-brand-500 transition';
+    btn.style.color = 'var(--accent)';
     btn.title = '联网搜索：开';
     label.textContent = '🌐 联网搜索：开';
-    label.className = 'cursor-pointer text-brand-500 font-medium';
+    label.style.color = 'var(--accent)';
+    label.style.fontWeight = '500';
   } else {
-    btn.className = 'p-2 text-slate-400 hover:text-brand-500 transition';
+    btn.style.color = 'var(--text-muted)';
     btn.title = '联网搜索：关';
     label.textContent = '🌐 联网搜索：关';
-    label.className = 'cursor-pointer hover:text-brand-500';
+    label.style.color = '';
+    label.style.fontWeight = '';
   }
 }
 
@@ -940,13 +1158,13 @@ function updateBudgetBar() {
   const pct = totalBudget > 0 ? Math.min((totalCost / totalBudget) * 100, 100) : 0;
   const bar = document.getElementById('costProgress');
   bar.style.width = pct + '%';
-  // 颜色变化: <50% 绿色, 50-80% 黄色, >80% 红色
+  // 颜色变化: <50% accent, 50-80% amber, >80% red
   if(pct > 80) {
-    bar.className = 'h-full bg-gradient-to-r from-red-400 to-red-500 rounded-full transition-all duration-500';
+    bar.style.background = 'linear-gradient(90deg, #f87171, #ef4444)';
   } else if(pct > 50) {
-    bar.className = 'h-full bg-gradient-to-r from-amber-400 to-orange-400 rounded-full transition-all duration-500';
+    bar.style.background = 'linear-gradient(90deg, #fbbf24, #f59e0b)';
   } else {
-    bar.className = 'h-full bg-gradient-to-r from-green-400 to-amber-400 rounded-full transition-all duration-500';
+    bar.style.background = 'linear-gradient(90deg, var(--accent-light), var(--accent))';
   }
 }
 
@@ -1029,11 +1247,11 @@ async function generateImage() {
     updateBudgetBar();
 
     // 显示生成的图片
-    let html = `<p class="mb-2 font-medium text-purple-600 dark:text-purple-400"><i class="fa-solid fa-palette mr-1"></i> AI 生成参考图</p>`;
+    let html = `<p class="mb-2 font-medium" style="color: var(--accent);"><i class="fa-solid fa-palette mr-1"></i> AI 生成参考图</p>`;
     data.images.forEach((url, i) => {
-      html += `<img src="${url}" class="max-w-full rounded-xl border border-slate-200 dark:border-slate-700 mb-2 cursor-pointer" onclick="window.open(this.src)" title="点击查看原图" alt="AI生成图像 ${i+1}">`;
+      html += `<img src="${url}" class="max-w-full rounded-xl mb-2 cursor-pointer" style="border: 1px solid var(--glass-border);" onclick="window.open(this.src)" title="点击查看原图" alt="AI生成图像 ${i+1}">`;
     });
-    html += `<p class="text-[10px] text-slate-400 mt-1"><i class="fa-solid fa-circle-info mr-1"></i>AI 生成的参考示意图，仅供辅助理解，不代表精确技术图纸 · ¥${PRICING.imageGen}/张</p>`;
+    html += `<p class="text-[10px] mt-1" style="color: var(--text-muted);"><i class="fa-solid fa-circle-info mr-1"></i>AI 生成的参考示意图，仅供辅助理解，不代表精确技术图纸 · ¥${PRICING.imageGen}/张</p>`;
     aiMsgEl.innerHTML = html;
     chatHistory.push({role: 'assistant', content: `[生成图像: ${prompt}]`, images: data.images});
     saveChat();

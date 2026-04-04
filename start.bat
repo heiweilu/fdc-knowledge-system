@@ -58,5 +58,8 @@ echo.
 REM 延迟2秒后自动打开浏览器
 start "" cmd /c "timeout /t 2 /nobreak >nul & start http://localhost:8080"
 
+REM 禁用 main.py 内部自动开页，避免重复弹出两个页面
+set "AUTO_OPEN_BROWSER=0"
+
 python main.py
 pause

@@ -1,6 +1,8 @@
 import json
 import os
+import threading
 import uuid
+import webbrowser
 import httpx
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
@@ -14,6 +16,10 @@ from services.matlab_bridge import matlab_bridge
 from services import qwen_client
 from config import HOST, PORT, DASHSCOPE_API_KEY, MODEL_PRICING, IMAGE_GEN_PRICE
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+INDEX_HTML = os.path.join(STATIC_DIR, "index.html")
+
 app = FastAPI(title="柔直仿真AI辅助知识系统", version="1.0.0")
 
 app.add_middleware(
@@ -23,7 +29,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 # ─── Models ───
@@ -55,7 +61,7 @@ class ImageGenRequest(BaseModel):
 
 @app.get("/")
 async def index():
-    return FileResponse("static/index.html")
+    return FileResponse(INDEX_HTML)
 
 
 @app.get("/api/status")
@@ -85,7 +91,11 @@ async def chat(req: ChatRequest):
     def generate():
         try:
             for chunk in qwen_client.chat_stream(req.messages, knowledge_ctx, req.enable_search):
-                yield f"data: {json.dumps({'content': chunk}, ensure_ascii=False)}\n\n"
+                # thinking 内容已经是 JSON 字符串 {"thinking": "..."}
+                if chunk.startswith("{") and '"thinking"' in chunk:
+                    yield f"data: {chunk}\n\n"
+                else:
+                    yield f"data: {json.dumps({'content': chunk}, ensure_ascii=False)}\n\n"
             yield "data: [DONE]\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
@@ -105,7 +115,10 @@ async def analyze_image(req: ImageAnalysisRequest):
             for chunk in qwen_client.analyze_image_stream(
                 req.image, req.text, req.analysis_type, knowledge_ctx
             ):
-                yield f"data: {json.dumps({'content': chunk}, ensure_ascii=False)}\n\n"
+                if chunk.startswith("{") and '"thinking"' in chunk:
+                    yield f"data: {chunk}\n\n"
+                else:
+                    yield f"data: {json.dumps({'content': chunk}, ensure_ascii=False)}\n\n"
             yield "data: [DONE]\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
@@ -154,7 +167,7 @@ async def generate_image(req: ImageGenRequest):
     try:
         urls = qwen_client.generate_image(req.prompt, req.n)
         # 下载图片到本地保存，避免临时URL过期
-        gen_dir = os.path.join("static", "generated")
+        gen_dir = os.path.join(STATIC_DIR, "generated")
         os.makedirs(gen_dir, exist_ok=True)
         local_urls = []
         with httpx.Client(timeout=60.0) as client:
@@ -179,4 +192,9 @@ if __name__ == "__main__":
     print(f"知识库已加载: {len(knowledge_base.chunks)} 个知识块")
     print(f"API Key: {'已配置' if DASHSCOPE_API_KEY else '未配置 (请设置 DASHSCOPE_API_KEY 环境变量)'}")
     print(f"启动服务: http://localhost:{PORT}")
+
+    auto_open_browser = os.getenv("AUTO_OPEN_BROWSER", "1") == "1"
+    if auto_open_browser:
+        threading.Timer(1.5, lambda: webbrowser.open(f"http://localhost:{PORT}")).start()
+
     uvicorn.run(app, host=HOST, port=PORT)

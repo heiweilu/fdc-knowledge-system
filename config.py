@@ -5,14 +5,14 @@ DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY", "")
 QWEN_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
 # 模型选择
-MODEL_OMNI = "qwen3.5-flash"             # 视觉语言模型（图片分析+文本统一）
-MODEL_TEXT = "qwen3.5-flash"             # 原生多模态模型（文本+图片统一）
-MODEL_IMAGE_GEN = "qwen-image-2.0"      # 图像生成模型
+MODEL_OMNI = "qwen3.6-plus"              # 视觉语言模型（图片分析+文本统一）
+MODEL_TEXT = "qwen3.6-plus"              # 文本对话模型（支持 enable_thinking）
+MODEL_IMAGE_GEN = "wan2.7-image"         # 图像生成模型（万相2.7）
 
-# 模型计费 (元/百万tokens) —— qwen3.5-flash
+# 模型计费 (元/百万tokens) —— qwen3.6-plus (0<Token≤256K档)
 MODEL_PRICING = {
-    "input": 0.2,   # 元/百万tokens
-    "output": 2.0,  # 元/百万tokens
+    "input": 2.0,    # 元/百万tokens
+    "output": 12.0,  # 元/百万tokens
 }
 IMAGE_GEN_PRICE = 0.2  # 元/张
 
