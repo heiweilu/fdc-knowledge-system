@@ -27,6 +27,7 @@ def chat_stream(messages: list[dict], knowledge_context: str = "", enable_search
     completion = client.chat.completions.create(
         model=MODEL_TEXT,
         messages=full_messages,
+        max_tokens=30000,
         stream=True,
         stream_options={"include_usage": True},
         extra_body=extra_body,
@@ -47,12 +48,12 @@ def chat_stream(messages: list[dict], knowledge_context: str = "", enable_search
 
 
 def analyze_image_stream(
-    image_base64: str,
+    images: list[str],
     user_text: str = "",
     analysis_type: str = "general",
     knowledge_context: str = "",
 ) -> AsyncGenerator[str, None]:
-    """图片分析，流式返回文本，支持 thinking 模式。"""
+    """图片分析（支持多张），流式返回文本，支持 thinking 模式。"""
     client = _get_client()
 
     prompt_template = IMAGE_PROMPTS.get(analysis_type, IMAGE_PROMPTS["general"])
@@ -64,23 +65,24 @@ def analyze_image_stream(
     if knowledge_context:
         system_msg += f"\n\n【相关知识库参考资料】\n{knowledge_context}"
 
+    # 构建多图内容：先所有图，最后放文字
+    content = []
+    for b64 in images:
+        content.append({
+            "type": "image_url",
+            "image_url": {"url": f"data:image/png;base64,{b64}"},
+        })
+    content.append({"type": "text", "text": user_prompt})
+
     messages = [
         {"role": "system", "content": system_msg},
-        {
-            "role": "user",
-            "content": [
-                {
-                    "type": "image_url",
-                    "image_url": {"url": f"data:image/png;base64,{image_base64}"},
-                },
-                {"type": "text", "text": user_prompt},
-            ],
-        },
+        {"role": "user", "content": content},
     ]
 
     completion = client.chat.completions.create(
         model=MODEL_OMNI,
         messages=messages,
+        max_tokens=30000,
         stream=True,
         stream_options={"include_usage": True},
         extra_body={"enable_thinking": True},

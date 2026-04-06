@@ -367,20 +367,17 @@ tailwind.config = {
     </div>
   </div>
 
-  <!-- 图片预览条 -->
+  <!-- 图片预览条（多图） -->
   <div id="imagePreview" class="hidden px-4 py-2 glass-card-strong" style="border-radius: 0; border-left: none; border-right: none;">
-    <div class="flex items-center gap-2">
-      <img id="previewImg" class="h-16 rounded-xl object-cover" style="border: 1px solid var(--glass-border);">
-      <div class="flex-1 text-xs" style="color: var(--text-secondary);">
-        <span id="previewName"></span>
-        <select id="analysisType" class="neu-input ml-2 text-xs px-2 py-1">
-          <option value="general">通用分析</option>
-          <option value="waveform">波形诊断</option>
-          <option value="model">模型解读</option>
-          <option value="params">参数识别</option>
-        </select>
-      </div>
-      <button onclick="clearImage()" class="hover:text-red-500 transition" style="color: var(--text-muted);"><i class="fa-solid fa-xmark"></i></button>
+    <div class="flex items-center gap-3">
+      <div id="imgThumbnails" class="flex items-center gap-1 flex-1 overflow-x-auto" style="max-height: 72px;"></div>
+      <select id="analysisType" class="neu-input text-xs px-2 py-1 shrink-0">
+        <option value="general">通用分析</option>
+        <option value="waveform">波形诊断</option>
+        <option value="model">模型解读</option>
+        <option value="params">参数识别</option>
+      </select>
+      <button onclick="clearAllImages()" class="shrink-0 hover:text-red-500 transition" style="color: var(--text-muted);" title="清除所有图片"><i class="fa-solid fa-xmark"></i></button>
     </div>
   </div>
 
@@ -390,7 +387,7 @@ tailwind.config = {
       <div id="dropZone" class="drop-zone flex items-end gap-2 p-3 glass-card-strong transition" style="border-radius: 20px;">
         <label class="cursor-pointer transition p-2 hover:text-[var(--accent)]" style="color: var(--text-muted);" title="上传图片">
           <i class="fa-solid fa-paperclip text-lg"></i>
-          <input id="imageInput" type="file" accept="image/*" class="hidden" onchange="handleImageSelect(event)">
+          <input id="imageInput" type="file" accept="image/*" multiple class="hidden" onchange="handleImageSelect(event)">
         </label>
         <textarea id="msgInput" rows="1" placeholder="输入问题或粘贴截图 (Ctrl+V)..."
           class="flex-1 bg-transparent resize-none outline-none text-sm max-h-32"
@@ -545,7 +542,8 @@ tailwind.config = {
 <script>
 // ─── State ───
 let chatHistory = JSON.parse(localStorage.getItem(`fdcChat_${localStorage.getItem('fdcCurrentConv') || ''}`) || '[]');
-let pendingImage = null; // {base64, name}
+let pendingImages = []; // [{base64, name, src}, ...]
+let abortController = null;
 let isStreaming = false;
 let enableSearch = false;
 let currentConvId = localStorage.getItem('fdcCurrentConv') || generateConvId();
@@ -571,6 +569,8 @@ document.addEventListener('DOMContentLoaded', () => {
   setupDragDrop();
   initBudget();
   renderConvList();
+  // 心跳：让服务器感知浏览器在线，关闭页面后服务器自动退出
+  setInterval(() => { fetch('/api/heartbeat').catch(() => {}); }, 3000);
 });
 
 async function checkStatus() {
@@ -689,10 +689,10 @@ async function sendMessage() {
   if(isStreaming) return;
   const input = document.getElementById('msgInput');
   const text = input.value.trim();
-  if(!text && !pendingImage) return;
+  if(!text && pendingImages.length === 0) return;
 
-  const userContent = text || (pendingImage ? '请分析这张图片' : '');
-  appendMessage('user', userContent, pendingImage?.base64);
+  const userContent = text || (pendingImages.length > 0 ? '请分析这些图片' : '');
+  appendMessage('user', userContent, pendingImages.map(i => i.base64));
 
   chatHistory.push({role: 'user', content: userContent});
   saveChat();
@@ -704,16 +704,16 @@ async function sendMessage() {
   isStreaming = true;
   updateSendBtn();
 
+  let fullText = '';
   try {
-    let fullText = '';
-    if(pendingImage) {
+    if(pendingImages.length > 0) {
       const analysisType = document.getElementById('analysisType').value;
       fullText = await streamRequest('/api/analyze-image', {
-        image: pendingImage.base64,
+        images: pendingImages.map(i => i.base64),
         text: userContent,
         analysis_type: analysisType
       }, aiMsgEl);
-      clearImage();
+      clearAllImages();
     } else {
       // 智能上下文管理：按token估算截断
       const msgs = buildContextMessages(chatHistory, 8000);
@@ -722,16 +722,24 @@ async function sendMessage() {
     chatHistory.push({role: 'assistant', content: fullText});
     saveChat();
   } catch(e) {
-    setMessageContent(aiMsgEl, `> **错误**: ${e.message}`);
+    if(e.name === 'AbortError') {
+      if(fullText) { chatHistory.push({role: 'assistant', content: fullText}); saveChat(); }
+    } else {
+      setMessageContent(aiMsgEl, `> **错误**: ${e.message}`);
+    }
   }
   isStreaming = false;
+  abortController = null;
   updateSendBtn();
 }
 
 async function streamRequest(endpoint, body, msgEl) {
+  const controller = new AbortController();
+  abortController = controller;
   const resp = await fetch(API + endpoint, {
     method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    signal: controller.signal
   });
   const reader = resp.body.getReader();
   const decoder = new TextDecoder();
@@ -780,10 +788,16 @@ function appendMessage(role, text, imageBase64, streaming) {
   bubble.className = `px-4 py-3 text-sm ${role === 'user' ? 'msg-user max-w-[80%]' : 'msg-ai w-full'} ${role === 'ai' ? 'prose max-w-none' : ''}`;
 
   if(imageBase64 && role === 'user') {
-    const img = document.createElement('img');
-    img.src = `data:image/png;base64,${imageBase64}`;
-    img.className = 'max-h-40 rounded-lg mb-2';
-    bubble.appendChild(img);
+    const imgs = Array.isArray(imageBase64) ? imageBase64 : [imageBase64];
+    const imgRow = document.createElement('div');
+    imgRow.className = 'flex flex-wrap gap-1 mb-2';
+    imgs.forEach(b64 => {
+      const img = document.createElement('img');
+      img.src = `data:image/png;base64,${b64}`;
+      img.className = 'max-h-32 max-w-[160px] rounded-lg object-cover';
+      imgRow.appendChild(img);
+    });
+    bubble.appendChild(imgRow);
   }
 
   const contentDiv = document.createElement('div');
@@ -821,6 +835,9 @@ function appendMessage(role, text, imageBase64, streaming) {
 }
 
 function setMessageContent(el, md, thinkingText) {
+  // 保留 <details> 展开状态，避免流式更新时折叠闪烁
+  const detailsWasOpen = el.querySelector('details')?.open ?? false;
+
   // 提取 token 用量信息
   const tokenMatch = md.match(/<!-- tokens: prompt=(\d+), completion=(\d+), total=(\d+) -->/);
   const cleanMd = md.replace(/\n*<!-- tokens:.*?-->/g, '');
@@ -829,7 +846,7 @@ function setMessageContent(el, md, thinkingText) {
   // 思考过程折叠显示
   if(thinkingText) {
     const thinkClean = thinkingText.replace(/\n*<!-- tokens:.*?-->/g, '');
-    html += `<details class="mb-3 glass-card overflow-hidden" style="border-left: 3px solid var(--accent);">
+    html += `<details class="mb-3 glass-card" style="border-left: 3px solid var(--accent);">
       <summary class="cursor-pointer px-3 py-2 text-xs font-medium select-none transition" style="color: var(--accent);">
         <i class="fa-solid fa-brain mr-1"></i>思考过程 <span style="color: var(--accent-light);">(${thinkClean.length} 字)</span>
       </summary>
@@ -838,6 +855,15 @@ function setMessageContent(el, md, thinkingText) {
   }
   html += renderMd(cleanMd);
   el.innerHTML = html;
+  // 恢复 <details> 展开状态，并自动滚底思考内容
+  if(detailsWasOpen) {
+    const d = el.querySelector('details');
+    if(d) {
+      d.open = true;
+      const thinkDiv = d.querySelector('div');
+      if(thinkDiv) thinkDiv.scrollTop = thinkDiv.scrollHeight;
+    }
+  }
   if(tokenMatch) {
     const promptTk = parseInt(tokenMatch[1]);
     const completionTk = parseInt(tokenMatch[2]);
@@ -1022,8 +1048,25 @@ function showWelcome() {
     </div>`;
 }
 
+function stopStreaming() {
+  if(abortController) abortController.abort();
+}
+
 function updateSendBtn() {
-  document.getElementById('sendBtn').disabled = isStreaming;
+  const btn = document.getElementById('sendBtn');
+  if(isStreaming) {
+    btn.onclick = stopStreaming;
+    btn.title = '停止生成';
+    btn.innerHTML = '<i class="fa-solid fa-stop text-lg"></i>';
+    btn.disabled = false;
+    btn.style.color = '#ef4444';
+  } else {
+    btn.onclick = sendMessage;
+    btn.title = '发送 (Enter)';
+    btn.innerHTML = '<i class="fa-solid fa-paper-plane text-lg"></i>';
+    btn.disabled = false;
+    btn.style.color = 'var(--accent)';
+  }
 }
 
 // ─── Context Management ───
@@ -1055,8 +1098,7 @@ function buildContextMessages(history, maxTokens) {
 
 // ─── Image handling ───
 function handleImageSelect(e) {
-  const file = e.target.files[0];
-  if(file) processImage(file);
+  Array.from(e.target.files).forEach(file => processImage(file));
 }
 
 function processImage(file) {
@@ -1064,22 +1106,39 @@ function processImage(file) {
   const reader = new FileReader();
   reader.onload = (e) => {
     const base64 = e.target.result.split(',')[1];
-    pendingImage = {base64, name: file.name};
-    showImagePreview(e.target.result, file.name);
+    pendingImages.push({base64, name: file.name, src: e.target.result});
+    renderImagePreviews();
   };
   reader.readAsDataURL(file);
 }
 
-function showImagePreview(src, name) {
-  document.getElementById('imagePreview').classList.remove('hidden');
-  document.getElementById('previewImg').src = src;
-  document.getElementById('previewName').textContent = name;
+function renderImagePreviews() {
+  const container = document.getElementById('imgThumbnails');
+  container.innerHTML = '';
+  pendingImages.forEach((img, i) => {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'relative shrink-0';
+    wrapper.innerHTML = `
+      <img src="${img.src}" class="h-14 w-14 rounded-lg object-cover" style="border: 1px solid var(--glass-border);" title="${img.name}">
+      <button onclick="clearImage(${i})" class="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-white hover:opacity-80" style="background: rgba(239,68,68,0.85); font-size: 10px; line-height: 1;">×</button>
+    `;
+    container.appendChild(wrapper);
+  });
+  const bar = document.getElementById('imagePreview');
+  if(pendingImages.length > 0) bar.classList.remove('hidden');
+  else bar.classList.add('hidden');
 }
 
-function clearImage() {
-  pendingImage = null;
-  document.getElementById('imagePreview').classList.add('hidden');
+function clearImage(index) {
+  pendingImages.splice(index, 1);
   document.getElementById('imageInput').value = '';
+  renderImagePreviews();
+}
+
+function clearAllImages() {
+  pendingImages = [];
+  document.getElementById('imageInput').value = '';
+  document.getElementById('imagePreview').classList.add('hidden');
 }
 
 function setupPaste() {
@@ -1090,7 +1149,6 @@ function setupPaste() {
       if(item.type.startsWith('image/')) {
         e.preventDefault();
         processImage(item.getAsFile());
-        break;
       }
     }
   });
@@ -1103,8 +1161,7 @@ function setupDragDrop() {
   zone.addEventListener('drop', (e) => {
     e.preventDefault();
     zone.classList.remove('drag-over');
-    const file = e.dataTransfer.files[0];
-    if(file) processImage(file);
+    Array.from(e.dataTransfer.files).forEach(file => processImage(file));
   });
 }
 

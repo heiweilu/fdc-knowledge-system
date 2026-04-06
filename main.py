@@ -1,6 +1,7 @@
 import json
 import os
 import threading
+import time
 import uuid
 import webbrowser
 import httpx
@@ -19,6 +20,10 @@ from config import HOST, PORT, DASHSCOPE_API_KEY, MODEL_PRICING, IMAGE_GEN_PRICE
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 INDEX_HTML = os.path.join(STATIC_DIR, "index.html")
+
+# 心跳看门狗状态
+_heartbeat_time: float = 0.0
+_heartbeat_lock = threading.Lock()
 
 app = FastAPI(title="柔直仿真AI辅助知识系统", version="1.0.0")
 
@@ -41,7 +46,8 @@ class ChatRequest(BaseModel):
 
 
 class ImageAnalysisRequest(BaseModel):
-    image: str  # base64
+    images: list[str] = []  # base64 列表（多张图片）
+    image: str = ""         # 兼容旧版单张（已废弃）
     text: str = ""
     analysis_type: str = "general"
 
@@ -61,7 +67,10 @@ class ImageGenRequest(BaseModel):
 
 @app.get("/")
 async def index():
-    return FileResponse(INDEX_HTML)
+    return FileResponse(INDEX_HTML, headers={
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+        "Pragma": "no-cache",
+    })
 
 
 @app.get("/api/status")
@@ -108,12 +117,16 @@ async def analyze_image(req: ImageAnalysisRequest):
     if not DASHSCOPE_API_KEY:
         return JSONResponse({"error": "未配置 DASHSCOPE_API_KEY 环境变量"}, status_code=500)
 
+    images = req.images if req.images else ([req.image] if req.image else [])
+    if not images:
+        return JSONResponse({"error": "未提供图片"}, status_code=400)
+
     knowledge_ctx = knowledge_base.get_context_for_query(req.text or req.analysis_type)
 
     def generate():
         try:
             for chunk in qwen_client.analyze_image_stream(
-                req.image, req.text, req.analysis_type, knowledge_ctx
+                images, req.text, req.analysis_type, knowledge_ctx
             ):
                 if chunk.startswith("{") and '"thinking"' in chunk:
                     yield f"data: {chunk}\n\n"
@@ -160,6 +173,14 @@ async def matlab_status():
     return matlab_bridge.status()
 
 
+@app.get("/api/heartbeat")
+async def heartbeat_endpoint():
+    global _heartbeat_time
+    with _heartbeat_lock:
+        _heartbeat_time = time.time()
+    return {"ok": True}
+
+
 @app.post("/api/generate-image")
 async def generate_image(req: ImageGenRequest):
     if not DASHSCOPE_API_KEY:
@@ -196,5 +217,19 @@ if __name__ == "__main__":
     auto_open_browser = os.getenv("AUTO_OPEN_BROWSER", "1") == "1"
     if auto_open_browser:
         threading.Timer(1.5, lambda: webbrowser.open(f"http://localhost:{PORT}")).start()
+
+    def _watchdog():
+        """8秒后开始监测：若 12秒无心跳则认为浏览器已关闭，自动退出服务"""
+        time.sleep(8)
+        while True:
+            time.sleep(3)
+            with _heartbeat_lock:
+                last = _heartbeat_time
+            if last > 0 and (time.time() - last) > 60:
+                print("[watchdog] 浏览器已关闭，自动退出服务...")
+                os._exit(0)
+
+    t = threading.Thread(target=_watchdog, daemon=True)
+    t.start()
 
     uvicorn.run(app, host=HOST, port=PORT)
