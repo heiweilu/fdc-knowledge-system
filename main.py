@@ -50,6 +50,7 @@ class ImageAnalysisRequest(BaseModel):
     image: str = ""         # 兼容旧版单张（已废弃）
     text: str = ""
     analysis_type: str = "general"
+    context_messages: list[dict] = []  # 对话上下文（将履历带入）
 
 
 class CustomParamRequest(BaseModel):
@@ -126,7 +127,7 @@ async def analyze_image(req: ImageAnalysisRequest):
     def generate():
         try:
             for chunk in qwen_client.analyze_image_stream(
-                images, req.text, req.analysis_type, knowledge_ctx
+                images, req.text, req.analysis_type, knowledge_ctx, req.context_messages
             ):
                 if chunk.startswith("{") and '"thinking"' in chunk:
                     yield f"data: {chunk}\n\n"
@@ -225,8 +226,9 @@ if __name__ == "__main__":
             time.sleep(3)
             with _heartbeat_lock:
                 last = _heartbeat_time
-            if last > 0 and (time.time() - last) > 60:
-                print("[watchdog] 浏览器已关闭，自动退出服务...")
+            if last > 0 and (time.time() - last) > 20:
+                print("[watchdog] 未检测到浏览器心跳，服务将在 3 秒后自动退出...")
+                time.sleep(3)
                 os._exit(0)
 
     t = threading.Thread(target=_watchdog, daemon=True)

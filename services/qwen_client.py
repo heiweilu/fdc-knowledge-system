@@ -52,14 +52,17 @@ def analyze_image_stream(
     user_text: str = "",
     analysis_type: str = "general",
     knowledge_context: str = "",
+    context_messages: list[dict] = [],
 ) -> AsyncGenerator[str, None]:
-    """图片分析（支持多张），流式返回文本，支持 thinking 模式。"""
+    """图片分析（支持多张 + 对话上下文），流式返回文本，支持 thinking 模式。"""
     client = _get_client()
 
-    prompt_template = IMAGE_PROMPTS.get(analysis_type, IMAGE_PROMPTS["general"])
-    user_prompt = prompt_template
-    if user_text:
-        user_prompt = f"{user_text}\n\n{prompt_template}"
+    # 如果有对话上下文，不应用独立分析模板，改成自然语言辅助指引
+    if context_messages:
+        user_prompt = user_text if user_text else "请根据上面的对话背景，分析我提供的截图中的相关信息。"
+    else:
+        prompt_template = IMAGE_PROMPTS.get(analysis_type, IMAGE_PROMPTS["general"])
+        user_prompt = f"{user_text}\n\n{prompt_template}" if user_text else prompt_template
 
     system_msg = SYSTEM_PROMPT
     if knowledge_context:
@@ -74,8 +77,10 @@ def analyze_image_stream(
         })
     content.append({"type": "text", "text": user_prompt})
 
+    # 对话历史 + 当前图片消息
     messages = [
         {"role": "system", "content": system_msg},
+        *context_messages,
         {"role": "user", "content": content},
     ]
 

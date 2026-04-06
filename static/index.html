@@ -306,6 +306,11 @@ tailwind.config = {
     <div class="divider-glass absolute left-3 right-3" style="top: auto;"></div>
     <button onclick="clearChat()" class="text-xs transition flex items-center gap-1" style="color: var(--accent);" title="新建对话"><i class="fa-solid fa-plus"></i> 新对话</button>
     <div class="flex items-center gap-3">
+      <button onclick="exportConversation()" class="transition" style="color: var(--text-muted);" title="导出对话为文件"><i class="fa-solid fa-file-export"></i></button>
+      <label class="cursor-pointer transition" style="color: var(--text-muted);" title="导入对话文件">
+        <i class="fa-solid fa-file-import"></i>
+        <input id="importFileInput" type="file" accept=".json" class="hidden" onchange="importConversation(event)">
+      </label>
       <button onclick="showGuide()" class="transition" style="color: var(--text-muted);" title="使用说明"><i class="fa-solid fa-circle-question"></i></button>
       <span id="statusDot" class="w-2.5 h-2.5 rounded-full bg-gray-400" style="animation: pulseRing 2s infinite;"></span>
     </div>
@@ -404,9 +409,17 @@ tailwind.config = {
         </button>
       </div>
       <p class="text-xs mt-2 text-center" style="color: var(--text-muted);">Enter 发送 · Shift+Enter 换行 · Ctrl+V 粘贴截图 · <span id="searchLabel" class="cursor-pointer hover:text-[var(--accent)]" onclick="toggleSearch()">🌐 联网搜索：关</span></p>
+      <p class="text-xs mt-1 text-center" style="color: var(--text-muted); opacity: 0.5;">by heiweilu · 273925452@qq.com</p>
     </div>
   </div>
 </main>
+
+<!-- ─── 图片 Lightbox ─── -->
+<div id="lightboxModal" class="fixed inset-0 z-[100] hidden items-center justify-center" style="background: rgba(0,0,0,0.85); backdrop-filter: blur(4px);" onclick="if(event.target===this)closeLightbox()">
+  <button onclick="closeLightbox()" class="absolute top-4 right-4 text-white/70 hover:text-white text-2xl z-10"><i class="fa-solid fa-xmark"></i></button>
+  <span class="absolute bottom-4 text-white/50 text-xs select-none">滚轮缩放 · 点击空白关闭</span>
+  <img id="lightboxImg" src="" class="max-w-[90vw] max-h-[90vh] rounded-xl object-contain select-none" style="cursor: zoom-in; transition: transform 0.1s;">
+</div>
 
 <!-- ─── 使用说明弹窗 ─── -->
 <div id="guideModal" class="fixed inset-0 z-50 hidden items-center justify-center" style="background: rgba(45,50,80,0.3); backdrop-filter: blur(8px);" onclick="if(event.target===this)closeGuide()">
@@ -694,7 +707,7 @@ async function sendMessage() {
   const userContent = text || (pendingImages.length > 0 ? '请分析这些图片' : '');
   appendMessage('user', userContent, pendingImages.map(i => i.base64));
 
-  chatHistory.push({role: 'user', content: userContent});
+  chatHistory.push({role: 'user', content: userContent, userImages: pendingImages.length > 0 ? pendingImages.map(i => i.base64) : undefined});
   saveChat();
 
   input.value = '';
@@ -708,10 +721,15 @@ async function sendMessage() {
   try {
     if(pendingImages.length > 0) {
       const analysisType = document.getElementById('analysisType').value;
+      // 有对话历史时带入上下文，让 AI 接续引导式对话；无历史时做独立分析
+      const ctxMsgs = chatHistory.length > 1
+        ? buildContextMessages(chatHistory.slice(0, -1), 4000)
+        : [];
       fullText = await streamRequest('/api/analyze-image', {
         images: pendingImages.map(i => i.base64),
-        text: userContent,
-        analysis_type: analysisType
+        text: userContent === '请分析这些图片' && ctxMsgs.length > 0 ? '' : userContent,
+        analysis_type: analysisType,
+        context_messages: ctxMsgs
       }, aiMsgEl);
       clearAllImages();
     } else {
@@ -792,9 +810,12 @@ function appendMessage(role, text, imageBase64, streaming) {
     const imgRow = document.createElement('div');
     imgRow.className = 'flex flex-wrap gap-1 mb-2';
     imgs.forEach(b64 => {
+      const src = `data:image/png;base64,${b64}`;
       const img = document.createElement('img');
-      img.src = `data:image/png;base64,${b64}`;
-      img.className = 'max-h-32 max-w-[160px] rounded-lg object-cover';
+      img.src = src;
+      img.className = 'max-h-32 max-w-[160px] rounded-lg object-cover cursor-pointer hover:opacity-90 transition';
+      img.title = '点击预览';
+      img.onclick = () => openLightbox(src);
       imgRow.appendChild(img);
     });
     bubble.appendChild(imgRow);
@@ -921,7 +942,16 @@ function renderMd(text) {
 }
 
 function saveChat() {
-  localStorage.setItem(`fdcChat_${currentConvId}`, JSON.stringify(chatHistory.slice(-100)));
+  const data = chatHistory.slice(-100);
+  try {
+    localStorage.setItem(`fdcChat_${currentConvId}`, JSON.stringify(data));
+  } catch(e) {
+    if(e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
+      // 空间不足时降级：去除用户图片原始数据，仅保留文本和AI图片
+      const slim = data.map(({role, content, images}) => ({role, content, images}));
+      try { localStorage.setItem(`fdcChat_${currentConvId}`, JSON.stringify(slim)); } catch(e2) {}
+    }
+  }
   // 更新对话列表
   const existing = convList.find(c => c.id === currentConvId);
   const title = chatHistory.length > 0 ? chatHistory[0].content.slice(0, 30) : '新对话';
@@ -951,7 +981,7 @@ function restoreChat() {
       });
       el.innerHTML = html;
     } else {
-      appendMessage(m.role === 'assistant' ? 'ai' : 'user', m.content);
+      appendMessage(m.role === 'assistant' ? 'ai' : 'user', m.content, m.userImages);
     }
   });
 }
@@ -965,6 +995,66 @@ function clearChat() {
   area.innerHTML = '';
   showWelcome();
   renderConvList();
+}
+
+function exportConversation() {
+  if(!chatHistory.length) { alert('当前对话为空，无内容可导出。'); return; }
+  const payload = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    convId: currentConvId,
+    history: chatHistory
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type: 'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `fdc-chat-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function importConversation(e) {
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const payload = JSON.parse(ev.target.result);
+      if(!payload.version || !Array.isArray(payload.history)) throw new Error('格式不正确');
+      const msgs = payload.history.filter(m => m.role && m.content !== undefined);
+      if(!msgs.length) throw new Error('对话内容为空');
+      // 导入为新对话
+      currentConvId = payload.convId || generateConvId();
+      chatHistory = msgs;
+      localStorage.setItem('fdcCurrentConv', currentConvId);
+      // 尝试存入 localStorage，如有配额则降级去除用户图片数据
+      const trySet = (data) => {
+        try {
+          localStorage.setItem(`fdcChat_${currentConvId}`, JSON.stringify(data));
+          return true;
+        } catch(e) { return false; }
+      };
+      if(!trySet(chatHistory)) {
+        const slim = chatHistory.map(({role, content, images}) => ({role, content, images}));
+        if(!trySet(slim)) { alert('导入失败：数据过大，超过本地存储限制。5MB）'); return; }
+        alert('注意：导入数据较大，已自动去除用户图片以符合存储限制。');
+      }
+      if(!convList.find(c => c.id === currentConvId)) {
+        const preview = msgs.find(m => m.role === 'user')?.content?.slice(0, 30) || '导入对话';
+        convList.unshift({id: currentConvId, preview});
+        localStorage.setItem('fdcConvList', JSON.stringify(convList));
+      }
+      document.getElementById('chatArea').innerHTML = '';
+      restoreChat();
+      renderConvList();
+      alert(`✅ 成功导入 ${msgs.length} 条消息`);
+    } catch(err) {
+      alert('导入失败：' + err.message);
+    } finally {
+      e.target.value = '';
+    }
+  };
+  reader.readAsText(file);
 }
 
 function generateConvId() {
@@ -1207,6 +1297,31 @@ function closeGuide() {
   m.classList.remove('flex');
   document.body.style.overflow = '';
 }
+
+// ─── Lightbox ───
+let _lbScale = 1;
+function openLightbox(src) {
+  _lbScale = 1;
+  const m = document.getElementById('lightboxModal');
+  const img = document.getElementById('lightboxImg');
+  img.src = src;
+  img.style.transform = 'scale(1)';
+  m.classList.remove('hidden');
+  m.classList.add('flex');
+  document.body.style.overflow = 'hidden';
+}
+function closeLightbox() {
+  const m = document.getElementById('lightboxModal');
+  m.classList.add('hidden');
+  m.classList.remove('flex');
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', (e) => { if(e.key === 'Escape') closeLightbox(); });
+document.getElementById('lightboxImg')?.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  _lbScale = Math.min(Math.max(_lbScale + (e.deltaY < 0 ? 0.15 : -0.15), 0.3), 5);
+  e.currentTarget.style.transform = `scale(${_lbScale})`;
+}, {passive: false});
 
 // ─── Budget / Cost Tracking ───
 function updateBudgetBar() {

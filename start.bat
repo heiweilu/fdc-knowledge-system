@@ -62,4 +62,8 @@ REM 禁用 main.py 内部自动开页，避免重复弹出两个页面
 set "AUTO_OPEN_BROWSER=0"
 
 python main.py
-pause
+if %errorlevel% neq 0 (
+    echo.
+    echo [!] 服务异常退出，请查看以上错误信息。
+    pause
+)
